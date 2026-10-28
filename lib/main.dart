@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
+import 'core/database/database_helper.dart';
 import 'core/routes/app_routes.dart';
 import 'core/theme/app_theme.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Ouvre (et crée si besoin) la base de données avant d'afficher l'appli.
+  await DatabaseHelper.instance.debugListTables();
+
   runApp(const MyGymApp());
 }
 
