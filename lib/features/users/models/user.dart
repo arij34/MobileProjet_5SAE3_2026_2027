@@ -1,4 +1,5 @@
 import 'user_role.dart';
+import 'user_status.dart';
 import 'user_table.dart';
 
 class User {
@@ -7,9 +8,10 @@ class User {
   final String lastName;
   final String email;
   final String passwordHash;
-  final String? phone;
+  final String phone;
   final UserRole role;
-  final bool isActive;
+  final UserStatus status;
+  final CoachType? coachType; // seulement si role == coach
   final DateTime createdAt;
 
   const User({
@@ -18,13 +20,17 @@ class User {
     required this.lastName,
     required this.email,
     required this.passwordHash,
-    this.phone,
+    required this.phone,
     this.role = UserRole.member,
-    this.isActive = true,
+    this.status = UserStatus.active,
+    this.coachType,
     required this.createdAt,
   });
 
   String get fullName => '$firstName $lastName';
+
+  bool get isActive => status == UserStatus.active;
+  bool get isPending => status == UserStatus.pending;
 
   Map<String, dynamic> toMap() {
     return {
@@ -35,7 +41,8 @@ class User {
       UserTable.colPasswordHash: passwordHash,
       UserTable.colPhone: phone,
       UserTable.colRole: role.value,
-      UserTable.colIsActive: isActive ? 1 : 0,
+      UserTable.colStatus: status.value,
+      UserTable.colCoachType: coachType?.value,
       UserTable.colCreatedAt: createdAt.toIso8601String(),
     };
   }
@@ -47,9 +54,10 @@ class User {
       lastName: map[UserTable.colLastName] as String,
       email: map[UserTable.colEmail] as String,
       passwordHash: map[UserTable.colPasswordHash] as String,
-      phone: map[UserTable.colPhone] as String?,
+      phone: map[UserTable.colPhone] as String,
       role: UserRole.fromValue(map[UserTable.colRole] as String?),
-      isActive: (map[UserTable.colIsActive] as int) == 1,
+      status: UserStatus.fromValue(map[UserTable.colStatus] as String?),
+      coachType: CoachType.fromValue(map[UserTable.colCoachType] as String?),
       createdAt: DateTime.parse(map[UserTable.colCreatedAt] as String),
     );
   }
@@ -62,7 +70,8 @@ class User {
     String? passwordHash,
     String? phone,
     UserRole? role,
-    bool? isActive,
+    UserStatus? status,
+    CoachType? coachType,
     DateTime? createdAt,
   }) {
     return User(
@@ -73,7 +82,8 @@ class User {
       passwordHash: passwordHash ?? this.passwordHash,
       phone: phone ?? this.phone,
       role: role ?? this.role,
-      isActive: isActive ?? this.isActive,
+      status: status ?? this.status,
+      coachType: coachType ?? this.coachType,
       createdAt: createdAt ?? this.createdAt,
     );
   }

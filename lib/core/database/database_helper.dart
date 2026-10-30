@@ -1,8 +1,7 @@
 import 'package:flutter/foundation.dart';
+import 'package:mygym/features/users/models/user_table.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
-
-import '../../features/users/models/user_table.dart';
 
 /// Accès unique à la base SQLite de MyGym (pattern singleton).
 ///
@@ -13,7 +12,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._internal();
 
   static const String _dbName = 'mygym.db';
-  static const int _dbVersion = 1;
+  static const int _dbVersion = 2; // 2 : suppression de users.gym_id
 
   Future<Database>? _dbFuture;
 
@@ -30,6 +29,7 @@ class DatabaseHelper {
         await db.execute('PRAGMA foreign_keys = ON');
       },
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -42,6 +42,15 @@ class DatabaseHelper {
     // await ChallengeTable.createTable(db);  // Module Challenges
     // await NutritionTable.createTable(db);  // Module Nutrition
     // await ActivityTable.createTable(db);   // Module Activités
+  }
+
+  /// Migrations pour les bases déjà installées.
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await UserTable.upgradeToV2(db); // v2 : suppression de users.gym_id
+    }
+    // Prochaines migrations :
+    // if (oldVersion < 3) { await GymTable.upgradeToV3(db); }
   }
 
   /// Outil de développement : supprime la base pour la recréer au prochain accès.

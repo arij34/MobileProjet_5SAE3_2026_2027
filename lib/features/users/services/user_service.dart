@@ -4,6 +4,7 @@ import '../../../core/database/database_helper.dart';
 import '../../../core/utils/password_hasher.dart';
 import '../models/user.dart';
 import '../models/user_role.dart';
+import '../models/user_status.dart';
 import '../models/user_table.dart';
 
 /// Erreur métier (email déjà pris, mauvais mot de passe...) avec un message affichable.
@@ -29,22 +30,35 @@ class UserService {
 
   // ---------- Inscription / connexion ----------
 
-  /// Inscription publique : le nouveau compte est toujours un adhérent.
-  /// Seul l'administrateur peut ensuite changer le rôle (voir [setRole]).
+  /// Inscription publique.
+  /// - Adhérent : compte actif tout de suite.
+  /// - Autres rôles (responsable, nutritionniste, coach) : compte "en attente"
+  ///   jusqu'à validation par l'administrateur.
+  /// Le rôle administrateur ne peut pas être choisi ici.
   Future<User> register({
     required String firstName,
     required String lastName,
     required String email,
     required String password,
-    String? phone,
+    required String phone,
+    UserRole role = UserRole.member,
+    CoachType? coachType,
   }) {
+    if (role == UserRole.admin) {
+      throw AuthException('Ce rôle ne peut pas être choisi à l\'inscription.');
+    }
+
+    final isCoach = role == UserRole.coach;
+
     return _createUser(
       firstName: firstName,
       lastName: lastName,
       email: email,
       password: password,
       phone: phone,
-      role: UserRole.member,
+      role: role,
+      status: role == UserRole.member ? UserStatus.active : UserStatus.pending,
+      coachType: isCoach ? coachType : null,
     );
   }
 
@@ -55,7 +69,12 @@ class UserService {
     if (user == null || !PasswordHasher.verify(password, user.passwordHash)) {
       throw AuthException('Email ou mot de passe incorrect.');
     }
-    if (!user.isActive) {
+    if (user.status == UserStatus.pending) {
+      throw AuthException(
+        'Votre compte est en attente de validation par l\'administrateur.',
+      );
+    }
+    if (user.status == UserStatus.disabled) {
       throw AuthException(
         'Ce compte est désactivé. Contactez un administrateur.',
       );
@@ -137,24 +156,38 @@ class UserService {
     return rows.map(User.fromMap).toList();
   }
 
+  /// Comptes d'un statut donné (ex. les comptes "en attente" pour l'admin).
+  Future<List<User>> getByStatus(UserStatus status) async {
+    final db = await _db;
+    final rows = await db.query(
+      UserTable.tableName,
+      where: '${UserTable.colStatus} = ?',
+      whereArgs: [status.value],
+      orderBy: '${UserTable.colCreatedAt} DESC',
+    );
+    return rows.map(User.fromMap).toList();
+  }
+
   // ---------- Modification ----------
 
   /// Met à jour le profil (nom, prénom, téléphone). L'email et le rôle ne changent pas ici.
-  Future<void> updateProfile(
+    Future<void> updateProfile(
     int userId, {
     required String firstName,
     required String lastName,
-    String? phone,
+    required String phone,
   }) async {
+    if (await phoneExists(phone, excludeUserId: userId)) {
+      throw AuthException('Ce numéro de téléphone est déjà utilisé.');
+    }
+
     final db = await _db;
     await db.update(
       UserTable.tableName,
       {
         UserTable.colFirstName: firstName.trim(),
         UserTable.colLastName: lastName.trim(),
-        UserTable.colPhone: (phone == null || phone.trim().isEmpty)
-            ? null
-            : phone.trim(),
+        UserTable.colPhone: phone.trim(),
       },
       where: '${UserTable.colId} = ?',
       whereArgs: [userId],
@@ -172,14 +205,23 @@ class UserService {
     );
   }
 
-  /// Active ou désactive un compte (réservé à l'administrateur).
-  Future<void> setActive(int userId, bool isActive) async {
+  /// Change le statut d'un compte : valider (active), refuser/désactiver (disabled).
+  /// Réservé à l'administrateur.
+  Future<void> setStatus(int userId, UserStatus status) async {
     final db = await _db;
     await db.update(
       UserTable.tableName,
-      {UserTable.colIsActive: isActive ? 1 : 0},
+      {UserTable.colStatus: status.value},
       where: '${UserTable.colId} = ?',
       whereArgs: [userId],
+    );
+  }
+
+  /// Active ou désactive un compte (réservé à l'administrateur).
+  Future<void> setActive(int userId, bool isActive) {
+    return setStatus(
+      userId,
+      isActive ? UserStatus.active : UserStatus.disabled,
     );
   }
 
@@ -207,12 +249,14 @@ class UserService {
     if (adminCount > 0) return;
 
     await _createUser(
-      firstName: 'Admin',
-      lastName: 'MyGym',
-      email: defaultAdminEmail,
-      password: defaultAdminPassword,
-      role: UserRole.admin,
-    );
+        firstName: 'Admin',
+        lastName: 'MyGym',
+        email: defaultAdminEmail,
+        password: defaultAdminPassword,
+        phone: '00000000',
+        role: UserRole.admin,
+        status: UserStatus.active,
+      );
   }
 
   // ---------- Interne ----------
@@ -222,12 +266,17 @@ class UserService {
     required String lastName,
     required String email,
     required String password,
-    String? phone,
+    required String phone,
     required UserRole role,
+    required UserStatus status,
+    CoachType? coachType,
   }) async {
     final cleanEmail = email.trim().toLowerCase();
     if (await emailExists(cleanEmail)) {
       throw AuthException('Cet email est déjà utilisé.');
+    }
+    if (await phoneExists(phone)) {
+      throw AuthException('Ce numéro de téléphone est déjà utilisé.');
     }
 
     final user = User(
@@ -235,13 +284,41 @@ class UserService {
       lastName: lastName.trim(),
       email: cleanEmail,
       passwordHash: PasswordHasher.hash(password),
-      phone: (phone == null || phone.trim().isEmpty) ? null : phone.trim(),
+      phone: phone.trim(),
       role: role,
+      status: status,
+      coachType: coachType,
       createdAt: DateTime.now(),
     );
 
     final db = await _db;
     final id = await db.insert(UserTable.tableName, user.toMap());
     return user.copyWith(id: id);
+  }
+
+    Future<User?> getByPhone(String phone) async {
+    final db = await _db;
+    final cleaned = phone.replaceAll(' ', '').trim();
+    final rows = await db.query(
+      UserTable.tableName,
+      where: "REPLACE(${UserTable.colPhone}, ' ', '') = ?",
+      whereArgs: [cleaned],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : User.fromMap(rows.first);
+  }
+
+   
+  Future<bool> phoneExists(String phone, {int? excludeUserId}) async {
+    final db = await _db;
+    final cleaned = phone.replaceAll(' ', '').trim();
+    final rows = await db.query(
+      UserTable.tableName,
+      where: "REPLACE(${UserTable.colPhone}, ' ', '') = ?"
+          "${excludeUserId != null ? ' AND ${UserTable.colId} != ?' : ''}",
+      whereArgs: [cleaned, if (excludeUserId != null) excludeUserId],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
   }
 }
