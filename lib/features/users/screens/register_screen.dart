@@ -7,6 +7,7 @@ import 'login_screen.dart';
 import '../../../core/session/session_manager.dart';
 import '../../../core/utils/password_strength.dart';
 import '../../../core/widgets/password_strength_bar.dart';
+import '../models/user_gender.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -26,6 +27,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   UserRole _role = UserRole.member;
   CoachType? _coachType;
   bool _loading = false;
+  UserGender? _gender;
 
   // Le rôle administrateur n'est pas proposé à l'inscription.
   static final List<UserRole> _availableRoles =
@@ -72,6 +74,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         phone: _phoneController.text,
         role: _role,
         coachType: _coachType,
+        gender: _gender,
       );
 
       if (!mounted) return;
@@ -198,6 +201,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         }
                         return null;
                       },
+                    ),
+                    const SizedBox(height: 18),
+
+                    // Genre
+                    DropdownButtonFormField<UserGender>(
+                      initialValue: _gender,
+                      decoration: _pill('Genre'),
+                      items: UserGender.values
+                          .map((g) => DropdownMenuItem(
+                                value: g,
+                                child: Text(g.label),
+                              ))
+                          .toList(),
+                      onChanged: (g) => setState(() {
+                        _gender = g;
+                      }),
                     ),
                     const SizedBox(height: 18),
 

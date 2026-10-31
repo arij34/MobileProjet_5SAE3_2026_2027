@@ -32,6 +32,7 @@ enum Permission {
 
   // ----- Progression personnelle (XP, niveaux, badges) -----
   viewOwnProgress,
+  editSportProfile, // taille, poids, objectif sportif
 }
 
 /// Qui a le droit de faire quoi.
@@ -87,8 +88,14 @@ class Permissions {
     Permission.manageNutrition: {UserRole.nutritionist},
 
     // ===== PROGRESSION PERSONNELLE =====
+    // L'administrateur n'a ni XP, ni profil complété, ni profil sportif.
     Permission.viewOwnProgress: {
-      UserRole.admin,
+      UserRole.gymManager,
+      UserRole.nutritionist,
+      UserRole.coach,
+      UserRole.member,
+    },
+    Permission.editSportProfile: {
       UserRole.gymManager,
       UserRole.nutritionist,
       UserRole.coach,

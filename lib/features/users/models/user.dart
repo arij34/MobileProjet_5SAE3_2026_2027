@@ -2,6 +2,7 @@ import 'user_goal.dart';
 import 'user_role.dart';
 import 'user_status.dart';
 import 'user_table.dart';
+import 'user_gender.dart';
 
 class User {
   final int? id;
@@ -21,6 +22,7 @@ class User {
   final double? heightCm;
   final double? weightKg;
   final UserGoal? goal;
+  final UserGender? gender;
 
   // Points d'expérience cumulés
   final int xp;
@@ -42,6 +44,7 @@ class User {
     this.weightKg,
     this.goal,
     this.xp = 0,
+    this.gender,
   });
 
   String get fullName => '$firstName $lastName';
@@ -67,6 +70,7 @@ class User {
       UserTable.colWeightKg: weightKg,
       UserTable.colGoal: goal?.value,
       UserTable.colXp: xp,
+      UserTable.colGender: gender?.value,
     };
   }
 
@@ -89,6 +93,7 @@ class User {
       weightKg: (map[UserTable.colWeightKg] as num?)?.toDouble(),
       goal: UserGoal.fromValue(map[UserTable.colGoal] as String?),
       xp: (map[UserTable.colXp] as int?) ?? 0,
+      gender: UserGender.fromValue(map[UserTable.colGender] as String?),
     );
   }
 
@@ -109,6 +114,7 @@ class User {
     double? weightKg,
     UserGoal? goal,
     int? xp,
+    UserGender? gender,
   }) {
     return User(
       id: id ?? this.id,
@@ -127,6 +133,18 @@ class User {
       weightKg: weightKg ?? this.weightKg,
       goal: goal ?? this.goal,
       xp: xp ?? this.xp,
+      gender: gender ?? this.gender,
     );
+  }
+    /// Âge calculé à partir de la date de naissance (null si inconnue).
+  int? get age {
+    final b = birthDate;
+    if (b == null) return null;
+    final now = DateTime.now();
+    var years = now.year - b.year;
+    final birthdayPassed =
+        now.month > b.month || (now.month == b.month && now.day >= b.day);
+    if (!birthdayPassed) years--;
+    return years;
   }
 }

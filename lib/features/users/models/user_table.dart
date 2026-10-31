@@ -22,6 +22,8 @@ class UserTable {
   static const String colWeightKg = 'weight_kg';
   static const String colGoal = 'goal';
   static const String colXp = 'xp';
+    // Ajouté en version 4
+  static const String colGender = 'gender';
 
   /// Rôles : administrateur, responsable de salle, nutritionniste,
   /// coach et adhérent. Statuts : actif, en attente, désactivé.
@@ -46,7 +48,10 @@ class UserTable {
         $colHeightCm REAL,
         $colWeightKg REAL,
         $colGoal TEXT,
-        $colXp INTEGER NOT NULL DEFAULT 0
+        $colXp INTEGER NOT NULL DEFAULT 0,
+        $colGender TEXT
+          CHECK($colGender IN ('male', 'female'))
+      )
       )
     ''');
   }
@@ -95,5 +100,14 @@ class UserTable {
     await addColumn(colWeightKg, 'REAL');
     await addColumn(colGoal, 'TEXT');
     await addColumn(colXp, 'INTEGER NOT NULL DEFAULT 0');
+  }
+
+    /// Migration v3 -> v4 : ajout du sexe.
+  static Future<void> upgradeToV4(Database db) async {
+    final info = await db.rawQuery('PRAGMA table_info($tableName)');
+    final existing = info.map((row) => row['name'] as String).toSet();
+    if (!existing.contains(colGender)) {
+      await db.execute('ALTER TABLE $tableName ADD COLUMN $colGender TEXT');
+    }
   }
 }

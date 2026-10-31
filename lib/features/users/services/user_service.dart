@@ -8,7 +8,8 @@ import '../models/user_status.dart';
 import '../models/user_table.dart';
 import '../models/user_goal.dart';
 import 'xp_service.dart';
-/// Erreur métier (email déjà pris, mauvais mot de passe...) avec un message affichable.
+import '../models/user_gender.dart';
+import '../../../core/session/permissions.dart';
 class AuthException implements Exception {
   final String message;
   AuthException(this.message);
@@ -44,6 +45,8 @@ class UserService {
     required String phone,
     UserRole role = UserRole.member,
     CoachType? coachType,
+    UserGender? gender,
+    DateTime? birthDate,
   }) async {
     if (role == UserRole.admin) {
       throw AuthException('Ce rôle ne peut pas être choisi à l\'inscription.');
@@ -60,11 +63,15 @@ class UserService {
       role: role,
       status: role == UserRole.member ? UserStatus.active : UserStatus.pending,
       coachType: isCoach ? coachType : null,
+      gender: gender,
+      birthDate: birthDate,
     );
 
     // Points de bienvenue (une seule fois).
-    await XpService.instance
-        .awardOnce(user.id!, 'registration', 20, 'Bienvenue sur MyGym !');
+    if (Permissions.roleCan(role, Permission.viewOwnProgress)) {
+      await XpService.instance
+          .awardOnce(user.id!, 'registration', 20, 'Bienvenue sur MyGym !');
+    }
 
     // On recharge l'utilisateur pour avoir son XP à jour.
     return (await getById(user.id!)) ?? user;
@@ -88,7 +95,9 @@ class UserService {
     }
 
     // +5 XP pour la première connexion de la journée.
-    await XpService.instance.awardDailyLogin(user.id!);
+    if (Permissions.roleCan(user.role, Permission.viewOwnProgress)) {
+      await XpService.instance.awardDailyLogin(user.id!);
+    }
 
     // On recharge l'utilisateur pour avoir son XP à jour.
     return (await getById(user.id!)) ?? user;
@@ -176,7 +185,7 @@ class UserService {
     DateTime? birthDate,
     double? heightCm,
     double? weightKg,
-    UserGoal? goal,
+    UserGoal? goal, UserGender? gender,
   }) async {
     if (await phoneExists(phone, excludeUserId: userId)) {
       throw AuthException('Ce numéro de téléphone est déjà utilisé.');
@@ -193,6 +202,7 @@ class UserService {
         UserTable.colHeightCm: heightCm,
         UserTable.colWeightKg: weightKg,
         UserTable.colGoal: goal?.value,
+        UserTable.colGender: gender?.value,
       },
       where: '${UserTable.colId} = ?',
       whereArgs: [userId],
@@ -275,6 +285,8 @@ class UserService {
     required UserRole role,
     required UserStatus status,
     CoachType? coachType,
+    UserGender? gender,
+    DateTime? birthDate,
   }) async {
     final cleanEmail = email.trim().toLowerCase();
     if (await emailExists(cleanEmail)) {
@@ -284,7 +296,7 @@ class UserService {
       throw AuthException('Ce numéro de téléphone est déjà utilisé.');
     }
 
-    final user = User(
+      final user = User(
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       email: cleanEmail,
@@ -293,6 +305,8 @@ class UserService {
       role: role,
       status: status,
       coachType: coachType,
+      gender: gender,         
+      birthDate: birthDate,   
       createdAt: DateTime.now(),
     );
 

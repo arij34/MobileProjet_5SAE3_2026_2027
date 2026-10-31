@@ -13,7 +13,8 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._internal();
 
   static const String _dbName = 'mygym.db';
-  static const int _dbVersion = 3; // 3 : profil enrichi, XP, journal d'activités
+  static const int _dbVersion = 4; // 3 : profil enrichi, XP, journal d'activités
+  // 4 : ajout du sexe
 
   Future<Database>? _dbFuture;
 
@@ -55,8 +56,10 @@ class DatabaseHelper {
       await UserTable.upgradeToV3(db); // v3 : profil enrichi + XP
       await ActivityLogTable.createTable(db); // v3 : journal d'activités
     }
-    // Prochaines migrations (collègues) : version 4 et suivantes
-    // if (oldVersion < 4) { await GymTable.createTable(db); }
+      if (oldVersion < 4) {
+    await UserTable.upgradeToV4(db);
+  }
+    
   }
 
   /// Outil de développement : supprime la base pour la recréer au prochain accès.

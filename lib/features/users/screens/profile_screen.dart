@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/routes/app_routes.dart';
+import '../../../core/session/permissions.dart';
 import '../../../core/session/session_manager.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/pill_decoration.dart';
@@ -8,6 +9,7 @@ import '../../../core/widgets/xp_card.dart';
 import '../models/level_system.dart';
 import '../models/profile_completion.dart';
 import '../models/user.dart';
+import '../models/user_gender.dart';
 import '../models/user_goal.dart';
 import '../services/avatar_service.dart';
 import '../services/user_service.dart';
@@ -33,7 +35,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   DateTime? _birthDate;
   UserGoal? _goal;
+  UserGender? _gender;
   bool _saving = false;
+
+  // Ce que ce rôle a le droit de voir (voir permissions.dart)
+  bool get _showProgress =>
+      Permissions.can(_user, Permission.viewOwnProgress);
+  bool get _showSportProfile =>
+      Permissions.can(_user, Permission.editSportProfile);
 
   @override
   void initState() {
@@ -52,6 +61,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _weightController = TextEditingController(
         text: _user.weightKg == null ? '' : _fmtNumber(_user.weightKg!));
     _goal = _user.goal;
+    _gender = _user.gender;
 
     // Rattrape les XP des comptes dont le profil était déjà rempli
     // avant l'existence du système d'XP.
@@ -105,7 +115,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   /// Donne les XP des étapes de profil (une seule fois chacune).
+  /// Les rôles sans progression (administrateur) ne gagnent pas d'XP.
   Future<void> _checkRewards() async {
+    if (!_showProgress) return;
+
     final u = _user;
     final id = u.id!;
     var gained = 0;
@@ -213,11 +226,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _pickBirthDate() async {
     final now = DateTime.now();
+    final first = DateTime(1940);
+    final last = DateTime(now.year - 13, now.month, now.day); // 13 ans minimum
+
+    // La date initiale doit rester entre first et last, sinon le sélecteur plante.
+    var initial = _birthDate ?? DateTime(now.year - 20);
+    if (initial.isAfter(last)) initial = last;
+    if (initial.isBefore(first)) initial = first;
+
     final picked = await showDatePicker(
       context: context,
-      initialDate: _birthDate ?? DateTime(now.year - 20),
-      firstDate: DateTime(1940),
-      lastDate: now,
+      initialDate: initial,
+      firstDate: first,
+      lastDate: last,
     );
     if (picked != null) {
       setState(() {
@@ -239,9 +260,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         lastName: _lastNameController.text,
         phone: _phoneController.text,
         birthDate: _birthDate,
-        heightCm: _parse(_heightController.text),
-        weightKg: _parse(_weightController.text),
-        goal: _goal,
+        // Profil sportif : seulement pour les rôles autorisés.
+        heightCm: _showSportProfile ? _parse(_heightController.text) : null,
+        weightKg: _showSportProfile ? _parse(_weightController.text) : null,
+        goal: _showSportProfile ? _goal : null,
+        gender: _gender,
       );
 
       await _reloadUser();
@@ -361,6 +384,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Sexe et âge (l'âge est calculé à partir de la date de naissance)
+    final identity = [
+      if (_user.gender != null) _user.gender!.label,
+      if (_user.age != null) '${_user.age} ans',
+    ].join(' · ');
+
     return Scaffold(
       backgroundColor: const Color(0xFFFCFAFE),
       appBar: AppBar(
@@ -410,6 +439,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 4),
               Text(_user.email,
                   style: const TextStyle(color: AppTheme.textSecondary)),
+              if (identity.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(identity,
+                    style: const TextStyle(color: AppTheme.textSecondary)),
+              ],
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
@@ -422,9 +456,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 16),
 
-              _buildCompletionCard(),
-              const SizedBox(height: 14),
-              _buildXpCard(),
+              // Profil complété et XP : selon la permission viewOwnProgress
+              if (_showProgress) ...[
+                _buildCompletionCard(),
+                const SizedBox(height: 14),
+                _buildXpCard(),
+              ],
               const SizedBox(height: 24),
 
               // ----- Informations personnelles -----
@@ -462,6 +499,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 },
               ),
               const SizedBox(height: 18),
+              DropdownButtonFormField<UserGender>(
+                initialValue: _gender,
+                decoration: pillDecoration('Sexe'),
+                items: UserGender.values
+                    .map((g) =>
+                        DropdownMenuItem(value: g, child: Text(g.label)))
+                    .toList(),
+                onChanged: (g) => setState(() => _gender = g),
+              ),
+              const SizedBox(height: 18),
               TextFormField(
                 controller: _birthController,
                 readOnly: true,
@@ -473,48 +520,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 28),
 
-              // ----- Profil sportif -----
-              _sectionTitle('Profil sportif (facultatif)'),
-              TextFormField(
-                controller: _heightController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: pillDecoration('Taille (cm)'),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return null;
-                  final n = _parse(v);
-                  if (n == null || n < 100 || n > 250) {
-                    return 'Taille invalide (100 à 250 cm)';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 18),
-              TextFormField(
-                controller: _weightController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: pillDecoration('Poids (kg)'),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return null;
-                  final n = _parse(v);
-                  if (n == null || n < 30 || n > 300) {
-                    return 'Poids invalide (30 à 300 kg)';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 18),
-              DropdownButtonFormField<UserGoal>(
-                initialValue: _goal,
-                decoration: pillDecoration('Objectif sportif'),
-                items: UserGoal.values
-                    .map((g) =>
-                        DropdownMenuItem(value: g, child: Text(g.label)))
-                    .toList(),
-                onChanged: (g) => setState(() => _goal = g),
-              ),
-              const SizedBox(height: 28),
+              // ----- Profil sportif : selon la permission editSportProfile -----
+              if (_showSportProfile) ...[
+                _sectionTitle('Profil sportif (facultatif)'),
+                TextFormField(
+                  controller: _heightController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: pillDecoration('Taille (cm)'),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return null;
+                    final n = _parse(v);
+                    if (n == null || n < 100 || n > 250) {
+                      return 'Taille invalide (100 à 250 cm)';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 18),
+                TextFormField(
+                  controller: _weightController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: pillDecoration('Poids (kg)'),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return null;
+                    final n = _parse(v);
+                    if (n == null || n < 30 || n > 300) {
+                      return 'Poids invalide (30 à 300 kg)';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 18),
+                DropdownButtonFormField<UserGoal>(
+                  initialValue: _goal,
+                  decoration: pillDecoration('Objectif sportif'),
+                  items: UserGoal.values
+                      .map((g) =>
+                          DropdownMenuItem(value: g, child: Text(g.label)))
+                      .toList(),
+                  onChanged: (g) => setState(() => _goal = g),
+                ),
+                const SizedBox(height: 28),
+              ],
 
               // ----- Boutons -----
               SizedBox(
