@@ -5,6 +5,9 @@ import '../models/user_role.dart';
 import '../services/user_service.dart';
 import 'login_screen.dart';
 import '../../../core/session/session_manager.dart';
+import '../../../core/utils/password_strength.dart';
+import '../../../core/widgets/password_strength_bar.dart';
+
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -83,7 +86,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         );
         Navigator.pop(context); // retour à la connexion
-      }else {
+      } else {
         SessionManager.instance.currentUser = user; // on connecte l'adhérent
         Navigator.pushReplacementNamed(context, AppRoutes.home);
       }
@@ -91,13 +94,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(e.message)));
-    }  catch (e, s) {
-  debugPrint('ERREUR INSCRIPTION : $e\n$s');
-  if (!mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('Erreur : $e')),
-  );
-} finally {
+    } catch (e, s) {
+      debugPrint('ERREUR INSCRIPTION : $e\n$s');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur : $e')),
+      );
+    } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -203,16 +206,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       controller: _passwordController,
                       obscureText: true,
                       decoration: _pill('Mot de passe'),
+                      onChanged: (_) => setState(() {}), // met à jour la barre
                       validator: (v) {
                         if (v == null || v.isEmpty) {
                           return 'Le mot de passe est obligatoire';
                         }
-                        if (v.length < 6) {
-                          return 'Au moins 6 caractères';
+                        if (PasswordStrength.evaluate(v).score < 3) {
+                          return 'Mot de passe trop faible';
                         }
                         return null;
                       },
                     ),
+
+                    // Barre de force, juste sous le champ
+                    PasswordStrengthBar(password: _passwordController.text),
                     const SizedBox(height: 18),
 
                     // Rôle
