@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../../core/routes/app_routes.dart';
+import '../../../core/session/permissions.dart';
 import '../../../core/session/session_manager.dart';
 import '../../../core/widgets/app_loader.dart';
 import '../../../core/widgets/user_avatar.dart';
-import '../../users/models/user_role.dart';
 import '../models/user.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -62,20 +62,41 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    final modules = <_ModuleItem>[
-      _ModuleItem('Salles de sport', 'Trouver une salle', Icons.fitness_center,
+    // Chaque service a la permission nécessaire pour l'afficher.
+    final allModules = <_ModuleItem>[
+      _ModuleItem(
+          'Salles de sport',
+          'Trouver une salle',
+          Icons.fitness_center,
           const [Color(0xFF4C378E), Color(0xFF7B5BC4)],
+          Permission.viewGyms,
           () => _soon('Salles de sport')),
-      _ModuleItem('Challenges', 'Relever des défis', Icons.emoji_events,
+      _ModuleItem(
+          'Challenges',
+          'Relever des défis',
+          Icons.emoji_events,
           const [Color(0xFFD43DA7), Color(0xFFE97BC8)],
+          Permission.viewChallenges,
           () => _soon('Challenges')),
-      _ModuleItem('Nutrition', 'Programmes & conseils', Icons.restaurant_menu,
+      _ModuleItem(
+          'Nutrition',
+          'Programmes & conseils',
+          Icons.restaurant_menu,
           const [Color(0xFFA86BEE), Color(0xFFC9A7F5)],
+          Permission.viewNutrition,
           () => _soon('Nutrition')),
-      _ModuleItem('Activités', 'Réserver une séance', Icons.event_available,
+      _ModuleItem(
+          'Activités',
+          'Réserver une séance',
+          Icons.event_available,
           const [Color(0xFF6C4FB8), Color(0xFFA86BEE)],
+          Permission.viewActivities,
           () => _soon('Activités')),
     ];
+
+    // On ne garde que les services autorisés pour ce rôle.
+    final modules =
+        allModules.where((m) => Permissions.can(user, m.permission)).toList();
 
     return Scaffold(
       backgroundColor: _grayLight,
@@ -86,8 +107,8 @@ class _HomeScreenState extends State<HomeScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
               children: [
-                // Carte réservée à l'administrateur
-                if (user.role == UserRole.admin) ...[
+                // Carte réservée à ceux qui peuvent gérer les utilisateurs
+                if (Permissions.can(user, Permission.manageUsers)) ...[
                   _buildAdminCard(),
                   const SizedBox(height: 26),
                 ],
@@ -101,15 +122,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
-                  childAspectRatio: 0.95,
-                  children: modules.map((m) => _ModuleCard(item: m)).toList(),
-                ),
+                if (modules.isEmpty)
+                  const Text(
+                    'Aucun service disponible pour votre rôle.',
+                    style: TextStyle(color: Color(0xFF7A7390)),
+                  )
+                else
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisSpacing: 14,
+                    mainAxisSpacing: 14,
+                    childAspectRatio: 0.95,
+                    children:
+                        modules.map((m) => _ModuleCard(item: m)).toList(),
+                  ),
               ],
             ),
           ),
@@ -120,7 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ---------- En-tête ----------
 
-    Widget _buildHeader(User user) {
+  Widget _buildHeader(User user) {
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
@@ -282,8 +310,10 @@ class _ModuleItem {
   final String subtitle;
   final IconData icon;
   final List<Color> colors;
+  final Permission permission; // permission nécessaire pour voir ce service
   final VoidCallback onTap;
-  _ModuleItem(this.title, this.subtitle, this.icon, this.colors, this.onTap);
+  _ModuleItem(this.title, this.subtitle, this.icon, this.colors,
+      this.permission, this.onTap);
 }
 
 class _ModuleCard extends StatelessWidget {

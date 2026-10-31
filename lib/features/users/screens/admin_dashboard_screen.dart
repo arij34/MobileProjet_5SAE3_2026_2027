@@ -5,6 +5,7 @@ import '../models/user.dart';
 import '../models/user_role.dart';
 import '../models/user_status.dart';
 import '../services/user_service.dart';
+import '../../../core/session/permissions.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -27,7 +28,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   String _search = '';
 
   User? get _me => SessionManager.instance.currentUser;
-  bool get _isAdmin => _me?.role == UserRole.admin;
+  bool get _isAdmin => Permissions.currentCan(Permission.manageUsers);
 
   @override
   void initState() {
