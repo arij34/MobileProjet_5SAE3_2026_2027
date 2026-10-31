@@ -21,6 +21,9 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _lilac = Color(0xFFE8D8FC);
   static const _violet = Color(0xFFA86BEE);
 
+  // Image de la bannière : changez le nom pour en choisir une autre
+  static const _bannerImage = 'lib/core/assets/images/image8.png';
+
   @override
   void initState() {
     super.initState();
@@ -107,6 +110,10 @@ class _HomeScreenState extends State<HomeScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
               children: [
+                // Bannière avec image
+                _buildBanner(),
+                const SizedBox(height: 22),
+
                 // Carte réservée à ceux qui peuvent gérer les utilisateurs
                 if (Permissions.can(user, Permission.manageUsers)) ...[
                   _buildAdminCard(),
@@ -235,6 +242,74 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // ---------- Bannière avec image ----------
+
+  Widget _buildBanner() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: SizedBox(
+        height: 150,
+        width: double.infinity,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(
+              _bannerImage,
+              fit: BoxFit.cover,
+              // Si l'image est introuvable : fond dégradé de secours
+              errorBuilder: (_, __, ___) => Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(colors: [_lilac, _violet]),
+                ),
+                child: const Icon(Icons.fitness_center,
+                    size: 56, color: Colors.white),
+              ),
+            ),
+            // Dégradé violet pour que le texte reste lisible
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    _violetDark.withValues(alpha: 0.85),
+                    _violetDark.withValues(alpha: 0.10),
+                  ],
+                ),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Prêt pour votre\nséance ?',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
+                      ),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'Bougez, mangez bien, progressez.',
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
