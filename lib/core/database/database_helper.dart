@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:mygym/features/users/models/activity_log_table.dart';
 import 'package:mygym/features/users/models/user_table.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
@@ -13,8 +12,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._internal();
 
   static const String _dbName = 'mygym.db';
-  static const int _dbVersion = 4; // 3 : profil enrichi, XP, journal d'activités
-  // 4 : ajout du sexe
+  static const int _dbVersion = 5; // 5 : ajout de users.proof_path
 
   Future<Database>? _dbFuture;
 
@@ -38,7 +36,6 @@ class DatabaseHelper {
   /// Crée toutes les tables au premier lancement de l'application.
   Future<void> _onCreate(Database db, int version) async {
     await UserTable.createTable(db); // Module Utilisateurs
-    await ActivityLogTable.createTable(db); // Journal d'activités (utilisateurs)
 
     // --- Chaque collègue ajoute la création de sa table ici ---
     // await GymTable.createTable(db);        // Module Salles de sport
@@ -49,17 +46,11 @@ class DatabaseHelper {
 
   /// Migrations pour les bases déjà installées.
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
-      await UserTable.upgradeToV2(db); // v2 : suppression de users.gym_id
-    }
-    if (oldVersion < 3) {
-      await UserTable.upgradeToV3(db); // v3 : profil enrichi + XP
-      await ActivityLogTable.createTable(db); // v3 : journal d'activités
-    }
-      if (oldVersion < 4) {
-    await UserTable.upgradeToV4(db);
-  }
-    
+    if (oldVersion < 2) await UserTable.upgradeToV2(db);
+    if (oldVersion < 3) await UserTable.upgradeToV3(db);
+    if (oldVersion < 4) await UserTable.upgradeToV4(db);
+    if (oldVersion < 5) await UserTable.upgradeToV5(db);
+    // Prochaines migrations : if (oldVersion < 6) { ... }
   }
 
   /// Outil de développement : supprime la base pour la recréer au prochain accès.

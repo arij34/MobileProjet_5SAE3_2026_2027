@@ -1,13 +1,18 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+
 import '../../../core/routes/app_routes.dart';
-import '../../../core/theme/app_theme.dart';
-import '../models/user_role.dart';
-import '../services/user_service.dart';
-import 'login_screen.dart';
 import '../../../core/session/session_manager.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/password_strength.dart';
 import '../../../core/widgets/password_strength_bar.dart';
 import '../models/user_gender.dart';
+import '../models/user_role.dart';
+import '../services/proof_service.dart';
+import '../services/user_service.dart';
+import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -26,12 +31,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   UserRole _role = UserRole.member;
   CoachType? _coachType;
-  bool _loading = false;
   UserGender? _gender;
+  String? _proofPath;
+  bool _loading = false;
 
   // Le rôle administrateur n'est pas proposé à l'inscription.
   static final List<UserRole> _availableRoles =
       UserRole.values.where((r) => r != UserRole.admin).toList();
+
+  bool get _needsProof => UserService.roleNeedsProof(_role);
 
   @override
   void dispose() {
@@ -60,6 +68,149 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  // ---------- Justificatif ----------
+
+  Future<void> _chooseProof() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Prendre une photo'),
+              onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choisir dans la galerie'),
+              onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+
+    try {
+      final path = await ProofService.instance.pick(source);
+      if (path == null) return; // annulé
+      // On supprime l'ancienne image si elle est remplacée.
+      await ProofService.instance.delete(_proofPath);
+      if (!mounted) return;
+      setState(() => _proofPath = path);
+    } catch (e, s) {
+      debugPrint('ERREUR JUSTIFICATIF : $e\n$s');
+      _snack('Impossible de récupérer l\'image : $e');
+    }
+  }
+
+  Widget _buildProofField() {
+    return FormField<String>(
+      validator: (_) => (_needsProof && _proofPath == null)
+          ? 'Le justificatif est obligatoire'
+          : null,
+      builder: (state) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Justificatif professionnel',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Photo de votre diplôme ou de votre carte professionnelle. '
+            'Elle sera examinée par l\'administrateur.',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 10),
+          InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () async {
+              await _chooseProof();
+              state.didChange(_proofPath);
+            },
+            child: Container(
+              width: double.infinity,
+              height: 170,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: state.hasError
+                      ? Colors.red
+                      : const Color(0xFFBDB6C8),
+                ),
+              ),
+              child: _proofPath == null
+                  ? const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.upload_file,
+                            size: 40, color: AppTheme.purpleLight),
+                        SizedBox(height: 8),
+                        Text('Ajouter le justificatif',
+                            style:
+                                TextStyle(color: AppTheme.textSecondary)),
+                      ],
+                    )
+                  : Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(19),
+                          child: Image.file(
+                            File(_proofPath!),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => const Center(
+                              child: Icon(Icons.broken_image_outlined),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          right: 8,
+                          top: 8,
+                          child: CircleAvatar(
+                            radius: 16,
+                            backgroundColor: Colors.white,
+                            child: const Icon(Icons.edit,
+                                size: 16, color: AppTheme.purpleLight),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+          if (state.hasError)
+            Padding(
+              padding: const EdgeInsets.only(top: 6, left: 14),
+              child: Text(
+                state.errorText!,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ---------- Envoi ----------
+
   Future<void> _submit() async {
     if (_loading) return;
     if (!_formKey.currentState!.validate()) return;
@@ -75,18 +226,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
         role: _role,
         coachType: _coachType,
         gender: _gender,
+        proofPath: _needsProof ? _proofPath : null,
       );
 
       if (!mounted) return;
 
       if (user.isPending) {
         // Responsable, nutritionniste, coach : validation par l'admin.
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Compte créé. Il sera actif après validation par l\'administrateur.',
-            ),
-          ),
+        _snack(
+          'Compte créé. Il sera actif après validation par l\'administrateur.',
         );
         Navigator.pop(context); // retour à la connexion
       } else {
@@ -94,19 +242,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
         Navigator.pushReplacementNamed(context, AppRoutes.home);
       }
     } on AuthException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.message)));
+      _snack(e.message);
     } catch (e, s) {
       debugPrint('ERREUR INSCRIPTION : $e\n$s');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur : $e')),
-      );
+      _snack('Erreur : $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
+
+  // ---------- Écran ----------
 
   @override
   Widget build(BuildContext context) {
@@ -204,19 +349,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     const SizedBox(height: 18),
 
-                    // Genre
+                    // Sexe
                     DropdownButtonFormField<UserGender>(
                       initialValue: _gender,
-                      decoration: _pill('Genre'),
+                      decoration: _pill('Sexe'),
                       items: UserGender.values
                           .map((g) => DropdownMenuItem(
                                 value: g,
                                 child: Text(g.label),
                               ))
                           .toList(),
-                      onChanged: (g) => setState(() {
-                        _gender = g;
-                      }),
+                      onChanged: (g) => setState(() => _gender = g),
+                      validator: (g) =>
+                          g == null ? 'Veuillez choisir votre sexe' : null,
                     ),
                     const SizedBox(height: 18),
 
@@ -236,8 +381,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         return null;
                       },
                     ),
-
-                    // Barre de force, juste sous le champ
                     PasswordStrengthBar(password: _passwordController.text),
                     const SizedBox(height: 18),
 
@@ -275,7 +418,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ],
 
-                    if (_role != UserRole.member) ...[
+                    // Justificatif (rôles professionnels)
+                    if (_needsProof) ...[
+                      const SizedBox(height: 22),
+                      _buildProofField(),
                       const SizedBox(height: 12),
                       const Text(
                         'Ce type de compte doit être validé par l\'administrateur avant la première connexion.',

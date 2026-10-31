@@ -1,15 +1,17 @@
 import 'package:sqflite/sqflite.dart';
 
 import '../../../core/database/database_helper.dart';
+import '../../../core/session/permissions.dart';
 import '../../../core/utils/password_hasher.dart';
 import '../models/user.dart';
+import '../models/user_gender.dart';
+import '../models/user_goal.dart';
 import '../models/user_role.dart';
 import '../models/user_status.dart';
 import '../models/user_table.dart';
-import '../models/user_goal.dart';
 import 'xp_service.dart';
-import '../models/user_gender.dart';
-import '../../../core/session/permissions.dart';
+
+/// Erreur métier (email déjà pris, mauvais mot de passe...) avec un message affichable.
 class AuthException implements Exception {
   final String message;
   AuthException(this.message);
@@ -30,14 +32,20 @@ class UserService {
 
   Future<Database> get _db => DatabaseHelper.instance.database;
 
+  /// Les rôles professionnels doivent fournir un justificatif.
+  static bool roleNeedsProof(UserRole role) =>
+      role == UserRole.coach ||
+      role == UserRole.nutritionist ||
+      role == UserRole.gymManager;
+
   // ---------- Inscription / connexion ----------
 
   /// Inscription publique.
   /// - Adhérent : compte actif tout de suite.
   /// - Autres rôles (responsable, nutritionniste, coach) : compte "en attente"
-  ///   jusqu'à validation par l'administrateur.
+  ///   jusqu'à validation par l'administrateur, avec un justificatif obligatoire.
   /// Le rôle administrateur ne peut pas être choisi ici.
-    Future<User> register({
+  Future<User> register({
     required String firstName,
     required String lastName,
     required String email,
@@ -47,9 +55,15 @@ class UserService {
     CoachType? coachType,
     UserGender? gender,
     DateTime? birthDate,
+    String? proofPath,
   }) async {
     if (role == UserRole.admin) {
       throw AuthException('Ce rôle ne peut pas être choisi à l\'inscription.');
+    }
+    if (roleNeedsProof(role) && (proofPath == null || proofPath.isEmpty)) {
+      throw AuthException(
+        'Un justificatif (diplôme ou carte professionnelle) est obligatoire.',
+      );
     }
 
     final isCoach = role == UserRole.coach;
@@ -65,9 +79,10 @@ class UserService {
       coachType: isCoach ? coachType : null,
       gender: gender,
       birthDate: birthDate,
+      proofPath: roleNeedsProof(role) ? proofPath : null,
     );
 
-    // Points de bienvenue (une seule fois).
+    // Points de bienvenue (une seule fois), sauf rôles sans progression.
     if (Permissions.roleCan(role, Permission.viewOwnProgress)) {
       await XpService.instance
           .awardOnce(user.id!, 'registration', 20, 'Bienvenue sur MyGym !');
@@ -76,7 +91,8 @@ class UserService {
     // On recharge l'utilisateur pour avoir son XP à jour.
     return (await getById(user.id!)) ?? user;
   }
-    Future<User> login(String email, String password) async {
+
+  Future<User> login(String email, String password) async {
     final user = await getByEmail(email);
 
     // Même message dans les deux cas pour ne pas révéler si l'email existe.
@@ -94,7 +110,7 @@ class UserService {
       );
     }
 
-    // +5 XP pour la première connexion de la journée.
+    // +5 XP pour la première connexion de la journée (pas pour l'admin).
     if (Permissions.roleCan(user.role, Permission.viewOwnProgress)) {
       await XpService.instance.awardDailyLogin(user.id!);
     }
@@ -176,8 +192,8 @@ class UserService {
 
   // ---------- Modification ----------
 
-  /// Met à jour le profil (nom, prénom, téléphone). L'email et le rôle ne changent pas ici.
-    Future<void> updateProfile(
+  /// Met à jour le profil. L'email et le rôle ne changent pas ici.
+  Future<void> updateProfile(
     int userId, {
     required String firstName,
     required String lastName,
@@ -185,7 +201,8 @@ class UserService {
     DateTime? birthDate,
     double? heightCm,
     double? weightKg,
-    UserGoal? goal, UserGender? gender,
+    UserGoal? goal,
+    UserGender? gender,
   }) async {
     if (await phoneExists(phone, excludeUserId: userId)) {
       throw AuthException('Ce numéro de téléphone est déjà utilisé.');
@@ -264,14 +281,14 @@ class UserService {
     if (adminCount > 0) return;
 
     await _createUser(
-        firstName: 'Admin',
-        lastName: 'MyGym',
-        email: defaultAdminEmail,
-        password: defaultAdminPassword,
-        phone: '00000000',
-        role: UserRole.admin,
-        status: UserStatus.active,
-      );
+      firstName: 'Admin',
+      lastName: 'MyGym',
+      email: defaultAdminEmail,
+      password: defaultAdminPassword,
+      phone: '00000000',
+      role: UserRole.admin,
+      status: UserStatus.active,
+    );
   }
 
   // ---------- Interne ----------
@@ -287,6 +304,7 @@ class UserService {
     CoachType? coachType,
     UserGender? gender,
     DateTime? birthDate,
+    String? proofPath,
   }) async {
     final cleanEmail = email.trim().toLowerCase();
     if (await emailExists(cleanEmail)) {
@@ -296,7 +314,7 @@ class UserService {
       throw AuthException('Ce numéro de téléphone est déjà utilisé.');
     }
 
-      final user = User(
+    final user = User(
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       email: cleanEmail,
@@ -305,8 +323,9 @@ class UserService {
       role: role,
       status: status,
       coachType: coachType,
-      gender: gender,         
-      birthDate: birthDate,   
+      gender: gender,
+      birthDate: birthDate,
+      proofPath: proofPath,
       createdAt: DateTime.now(),
     );
 
@@ -315,7 +334,7 @@ class UserService {
     return user.copyWith(id: id);
   }
 
-    Future<User?> getByPhone(String phone) async {
+  Future<User?> getByPhone(String phone) async {
     final db = await _db;
     final cleaned = phone.replaceAll(' ', '').trim();
     final rows = await db.query(
@@ -327,7 +346,6 @@ class UserService {
     return rows.isEmpty ? null : User.fromMap(rows.first);
   }
 
-   
   Future<bool> phoneExists(String phone, {int? excludeUserId}) async {
     final db = await _db;
     final cleaned = phone.replaceAll(' ', '').trim();
@@ -335,12 +353,13 @@ class UserService {
       UserTable.tableName,
       where: "REPLACE(${UserTable.colPhone}, ' ', '') = ?"
           "${excludeUserId != null ? ' AND ${UserTable.colId} != ?' : ''}",
-            whereArgs: [cleaned, ?excludeUserId],
+      whereArgs: [cleaned, ?excludeUserId],
       limit: 1,
     );
     return rows.isNotEmpty;
   }
-    /// Enregistre l'adresse de la photo de profil (null = retirer la photo).
+
+  /// Enregistre l'adresse de la photo de profil (null = retirer la photo).
   Future<void> updatePhoto(int userId, String? photoUrl) async {
     final db = await _db;
     await db.update(
@@ -350,7 +369,8 @@ class UserService {
       whereArgs: [userId],
     );
   }
-    /// Réinitialisation du mot de passe (application locale, sans envoi d'email).
+
+  /// Réinitialisation du mot de passe (application locale, sans envoi d'email).
   Future<void> resetPassword(String email, String newPassword) async {
     final user = await getByEmail(email);
     if (user == null) {

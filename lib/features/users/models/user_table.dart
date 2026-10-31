@@ -22,8 +22,12 @@ class UserTable {
   static const String colWeightKg = 'weight_kg';
   static const String colGoal = 'goal';
   static const String colXp = 'xp';
-    // Ajouté en version 4
+
+  // Ajouté en version 4
   static const String colGender = 'gender';
+
+  // Ajouté en version 5 : photo du justificatif (comptes professionnels)
+  static const String colProofPath = 'proof_path';
 
   /// Rôles : administrateur, responsable de salle, nutritionniste,
   /// coach et adhérent. Statuts : actif, en attente, désactivé.
@@ -50,23 +54,28 @@ class UserTable {
         $colGoal TEXT,
         $colXp INTEGER NOT NULL DEFAULT 0,
         $colGender TEXT
-          CHECK($colGender IN ('male', 'female'))
-      )
+          CHECK($colGender IN ('male', 'female')),
+        $colProofPath TEXT
       )
     ''');
+  }
+
+  /// Ajoute une colonne seulement si elle n'existe pas déjà.
+  static Future<void> _addColumnIfMissing(
+      Database db, String name, String type) async {
+    final info = await db.rawQuery('PRAGMA table_info($tableName)');
+    final existing = info.map((row) => row['name'] as String).toSet();
+    if (!existing.contains(name)) {
+      await db.execute('ALTER TABLE $tableName ADD COLUMN $name $type');
+    }
   }
 
   /// Migration v1 -> v2 : suppression de la colonne gym_id.
   /// On recrée la table, car DROP COLUMN n'est pas disponible
   /// sur les anciennes versions d'Android.
   static Future<void> upgradeToV2(Database db) async {
-    // 1. On met l'ancienne table de côté
     await db.execute('ALTER TABLE $tableName RENAME TO ${tableName}_old');
-
-    // 2. On crée la nouvelle table (schéma actuel, sans gym_id)
     await createTable(db);
-
-    // 3. On copie les données (sans gym_id)
     await db.execute('''
       INSERT INTO $tableName
         ($colId, $colFirstName, $colLastName, $colEmail, $colPasswordHash,
@@ -76,38 +85,26 @@ class UserTable {
          $colPhone, $colRole, $colStatus, $colCoachType, $colCreatedAt
       FROM ${tableName}_old
     ''');
-
-    // 4. On supprime l'ancienne table
     await db.execute('DROP TABLE ${tableName}_old');
   }
 
-  /// Migration v2 -> v3 : profil enrichi (photo, date de naissance, taille,
-  /// poids, objectif) et points d'expérience.
-  /// On n'ajoute une colonne que si elle n'existe pas déjà.
+  /// Migration v2 -> v3 : profil enrichi et points d'expérience.
   static Future<void> upgradeToV3(Database db) async {
-    final info = await db.rawQuery('PRAGMA table_info($tableName)');
-    final existing = info.map((row) => row['name'] as String).toSet();
-
-    Future<void> addColumn(String name, String type) async {
-      if (!existing.contains(name)) {
-        await db.execute('ALTER TABLE $tableName ADD COLUMN $name $type');
-      }
-    }
-
-    await addColumn(colPhotoUrl, 'TEXT');
-    await addColumn(colBirthDate, 'TEXT');
-    await addColumn(colHeightCm, 'REAL');
-    await addColumn(colWeightKg, 'REAL');
-    await addColumn(colGoal, 'TEXT');
-    await addColumn(colXp, 'INTEGER NOT NULL DEFAULT 0');
+    await _addColumnIfMissing(db, colPhotoUrl, 'TEXT');
+    await _addColumnIfMissing(db, colBirthDate, 'TEXT');
+    await _addColumnIfMissing(db, colHeightCm, 'REAL');
+    await _addColumnIfMissing(db, colWeightKg, 'REAL');
+    await _addColumnIfMissing(db, colGoal, 'TEXT');
+    await _addColumnIfMissing(db, colXp, 'INTEGER NOT NULL DEFAULT 0');
   }
 
-    /// Migration v3 -> v4 : ajout du sexe.
+  /// Migration v3 -> v4 : ajout du sexe.
   static Future<void> upgradeToV4(Database db) async {
-    final info = await db.rawQuery('PRAGMA table_info($tableName)');
-    final existing = info.map((row) => row['name'] as String).toSet();
-    if (!existing.contains(colGender)) {
-      await db.execute('ALTER TABLE $tableName ADD COLUMN $colGender TEXT');
-    }
+    await _addColumnIfMissing(db, colGender, 'TEXT');
+  }
+
+  /// Migration v4 -> v5 : photo du justificatif (comptes professionnels).
+  static Future<void> upgradeToV5(Database db) async {
+    await _addColumnIfMissing(db, colProofPath, 'TEXT');
   }
 }

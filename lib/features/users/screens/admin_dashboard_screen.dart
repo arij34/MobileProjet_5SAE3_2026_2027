@@ -6,6 +6,8 @@ import '../models/user_role.dart';
 import '../models/user_status.dart';
 import '../services/user_service.dart';
 import '../../../core/session/permissions.dart';
+import '../../../core/widgets/proof_viewer.dart';
+import '../services/ai_service.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -26,6 +28,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   List<User> _users = [];
   bool _loading = true;
   String _search = '';
+
+  // Rapports IA gardés en mémoire (clé = id utilisateur)
+  final Map<int, ProofReport> _reports = {};
+  final Map<int, String> _reportErrors = {};
+  final Set<int> _analyzing = {};
 
   User? get _me => SessionManager.instance.currentUser;
   bool get _isAdmin => Permissions.currentCan(Permission.manageUsers);
@@ -132,6 +139,28 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
     if (ok != true) return;
     await _run(() => UserService.instance.delete(u.id!), 'Compte supprimé.');
+  }
+
+  /// Lance l'analyse IA du justificatif d'un compte.
+  Future<void> _analyze(User u) async {
+    final id = u.id!;
+    setState(() {
+      _analyzing.add(id);
+      _reportErrors.remove(id);
+    });
+    try {
+      final report = await AiService.instance.analyzeProof(u);
+      if (!mounted) return;
+      setState(() => _reports[id] = report);
+    } on AiException catch (e) {
+      if (!mounted) return;
+      setState(() => _reportErrors[id] = e.message);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _reportErrors[id] = 'Erreur inattendue : $e');
+    } finally {
+      if (mounted) setState(() => _analyzing.remove(id));
+    }
   }
 
   // ---------- Helpers visuels ----------
@@ -407,6 +436,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
           const SizedBox(height: 12),
           _pill(roleText, _violet, icon: _roleIcon(u.role)),
+
+          // Justificatif + rapport IA : seulement pour les rôles professionnels
+          if (UserService.roleNeedsProof(u.role)) ...[
+            const SizedBox(height: 14),
+            const Text('Justificatif professionnel',
+                style: TextStyle(
+                    color: _violetDark,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13)),
+            const SizedBox(height: 8),
+            ProofViewer(proofPath: u.proofPath),
+            if (u.hasProof) ...[
+              const SizedBox(height: 10),
+              _buildAiReport(u),
+            ],
+          ],
+
           const SizedBox(height: 14),
           Row(
             children: [
@@ -448,6 +494,123 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  // ---------- Rapport IA ----------
+
+  Widget _buildAiReport(User u) {
+    final id = u.id!;
+
+    // 1. Analyse en cours
+    if (_analyzing.contains(id)) {
+      return const Row(
+        children: [
+          SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: _pink)),
+          SizedBox(width: 10),
+          Text('Analyse en cours...',
+              style: TextStyle(color: _textSecondary)),
+        ],
+      );
+    }
+
+    // 2. Pas encore de rapport : bouton (et erreur éventuelle)
+    final report = _reports[id];
+    if (report == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_reportErrors[id] != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                '${_reportErrors[id]}\nTu peux vérifier le justificatif à la main.',
+                style: const TextStyle(color: Color(0xFFD64545), fontSize: 12),
+              ),
+            ),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _violetDark,
+              side: const BorderSide(color: _violet),
+              shape: const StadiumBorder(),
+            ),
+            icon: const Icon(Icons.auto_awesome, size: 18),
+            label: Text(_reportErrors[id] == null
+                ? 'Analyser avec l\'IA'
+                : 'Réessayer l\'analyse'),
+            onPressed: () => _analyze(u),
+          ),
+        ],
+      );
+    }
+
+    // 3. Rapport disponible
+    final ok = report.nameMatches && report.specialtyMatches;
+    final color = ok ? const Color(0xFF2E9E6B) : const Color(0xFFE8920C);
+
+    Widget line(IconData icon, String label, String value, {Color? c}) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 16, color: c ?? _violet),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text('$label : $value',
+                  style: const TextStyle(fontSize: 12.5)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Rapport IA (aide à la décision)',
+              style: TextStyle(
+                  color: color, fontWeight: FontWeight.w700, fontSize: 13)),
+          const SizedBox(height: 8),
+          line(Icons.description_outlined, 'Document',
+              report.documentTypeLabel),
+          line(Icons.badge_outlined, 'Nom lu',
+              report.nameRead ?? 'non lisible'),
+          line(Icons.work_outline, 'Spécialité',
+              report.specialty ?? 'non lisible'),
+          line(
+              report.nameMatches ? Icons.check_circle : Icons.cancel,
+              'Nom cohérent avec le compte',
+              report.nameMatches ? 'oui' : 'non',
+              c: report.nameMatches ? const Color(0xFF2E9E6B) : Colors.red),
+          line(
+              report.specialtyMatches ? Icons.check_circle : Icons.cancel,
+              'Spécialité cohérente avec le rôle',
+              report.specialtyMatches ? 'oui' : 'non',
+              c: report.specialtyMatches
+                  ? const Color(0xFF2E9E6B)
+                  : Colors.red),
+          line(Icons.speed, 'Confiance', report.confidence),
+          const SizedBox(height: 4),
+          Text(report.summary,
+              style: const TextStyle(
+                  fontSize: 12.5, color: _textSecondary, height: 1.3)),
+          const SizedBox(height: 6),
+          const Text('La décision finale reste la tienne.',
+              style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
         ],
       ),
     );

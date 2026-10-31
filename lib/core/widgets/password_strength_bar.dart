@@ -24,7 +24,7 @@ class PasswordStrengthBar extends StatelessWidget {
                   child: TweenAnimationBuilder<double>(
                     tween: Tween(begin: 0, end: s.progress),
                     duration: const Duration(milliseconds: 300),
-                    builder: (_, value, __) => LinearProgressIndicator(
+                    builder: (_, value, _) => LinearProgressIndicator(
                       value: value,
                       minHeight: 7,
                       backgroundColor: const Color(0xFFE8D8FC),
