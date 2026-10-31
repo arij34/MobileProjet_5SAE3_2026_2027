@@ -2,9 +2,17 @@ import 'package:flutter/material.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/session/session_manager.dart';
 import '../../../core/theme/app_theme.dart';
-import '../models/user.dart';
-import '../services/user_service.dart';
 import '../../../core/widgets/pill_decoration.dart';
+import '../../../core/widgets/user_avatar.dart';
+import '../../../core/widgets/xp_card.dart';
+import '../models/level_system.dart';
+import '../models/profile_completion.dart';
+import '../models/user.dart';
+import '../models/user_goal.dart';
+import '../services/avatar_service.dart';
+import '../services/user_service.dart';
+import '../services/xp_service.dart';
+
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -15,18 +23,39 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   late User _user;
+
   late final TextEditingController _firstNameController;
   late final TextEditingController _lastNameController;
   late final TextEditingController _phoneController;
+  late final TextEditingController _birthController;
+  late final TextEditingController _heightController;
+  late final TextEditingController _weightController;
+
+  DateTime? _birthDate;
+  UserGoal? _goal;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
     _user = SessionManager.instance.currentUser!;
+
     _firstNameController = TextEditingController(text: _user.firstName);
     _lastNameController = TextEditingController(text: _user.lastName);
     _phoneController = TextEditingController(text: _user.phone);
+
+    _birthDate = _user.birthDate;
+    _birthController = TextEditingController(
+        text: _birthDate == null ? '' : _fmtDate(_birthDate!));
+    _heightController = TextEditingController(
+        text: _user.heightCm == null ? '' : _fmtNumber(_user.heightCm!));
+    _weightController = TextEditingController(
+        text: _user.weightKg == null ? '' : _fmtNumber(_user.weightKg!));
+    _goal = _user.goal;
+
+    // Rattrape les XP des comptes dont le profil était déjà rempli
+    // avant l'existence du système d'XP.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkRewards());
   }
 
   @override
@@ -34,7 +63,168 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _firstNameController.dispose();
     _lastNameController.dispose();
     _phoneController.dispose();
+    _birthController.dispose();
+    _heightController.dispose();
+    _weightController.dispose();
     super.dispose();
+  }
+
+  // ---------- Petits outils ----------
+
+  String get _initial =>
+      _user.firstName.isEmpty ? '?' : _user.firstName[0].toUpperCase();
+
+  String _fmtDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/'
+      '${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  /// 170.0 -> "170" ; 72.5 -> "72.5"
+  String _fmtNumber(double v) =>
+      v == v.roundToDouble() ? v.toInt().toString() : v.toString();
+
+  /// Texte -> nombre (accepte la virgule). Vide ou invalide -> null.
+  double? _parse(String text) {
+    final t = text.trim().replaceAll(',', '.');
+    return t.isEmpty ? null : double.tryParse(t);
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  // ---------- Utilisateur et XP ----------
+
+  /// Recharge l'utilisateur depuis la base (XP, photo...) et met la session à jour.
+  Future<void> _reloadUser() async {
+    final fresh = await UserService.instance.getById(_user.id!);
+    if (fresh == null) return;
+    SessionManager.instance.currentUser = fresh;
+    if (mounted) setState(() => _user = fresh);
+  }
+
+  /// Donne les XP des étapes de profil (une seule fois chacune).
+  Future<void> _checkRewards() async {
+    final u = _user;
+    final id = u.id!;
+    var gained = 0;
+
+    if (u.photoUrl != null && u.photoUrl!.isNotEmpty) {
+      gained += await XpService.instance
+          .awardOnce(id, 'photo', 10, 'Photo de profil choisie');
+    }
+    if (u.heightCm != null && u.weightKg != null && u.goal != null) {
+      gained += await XpService.instance
+          .awardOnce(id, 'sport_profile', 15, 'Profil sportif renseigné');
+    }
+    if (ProfileCompletion.of(u).percent >= 100) {
+      gained += await XpService.instance
+          .awardOnce(id, 'profile_complete', 50, 'Profil complété à 100 %');
+    }
+
+    if (gained > 0) {
+      await _reloadUser();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      _snack('+$gained XP gagnés !');
+    }
+  }
+
+  // ---------- Photo de profil (API DiceBear) ----------
+
+  Future<void> _chooseAvatar() async {
+    final seed = '${_user.firstName}${_user.id}';
+
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Choisir un avatar',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary)),
+              const SizedBox(height: 4),
+              const Text('Avatars générés par l\'API DiceBear',
+                  style: TextStyle(
+                      fontSize: 12, color: AppTheme.textSecondary)),
+              const SizedBox(height: 16),
+              GridView.count(
+                crossAxisCount: 3,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 14,
+                crossAxisSpacing: 14,
+                children: AvatarService.styles.map((style) {
+                  final url = AvatarService.urlFor(style, seed);
+                  return InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => Navigator.pop(sheetContext, url),
+                    child: Center(
+                      child: UserAvatar(
+                          photoUrl: url, initial: _initial, radius: 40),
+                    ),
+                  );
+                }).toList(),
+              ),
+              if (_user.photoUrl != null) ...[
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  // '' = retirer la photo
+                  onPressed: () => Navigator.pop(sheetContext, ''),
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  label: const Text('Retirer la photo',
+                      style: TextStyle(color: Colors.red)),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (choice == null) return; // fenêtre fermée sans choisir
+    await _setPhoto(choice.isEmpty ? null : choice);
+  }
+
+  Future<void> _setPhoto(String? url) async {
+    try {
+      await UserService.instance.updatePhoto(_user.id!, url);
+
+      await _reloadUser();
+      _snack(url == null ? 'Photo retirée.' : 'Photo mise à jour.');
+      await _checkRewards();
+    } catch (e, s) {
+      debugPrint('ERREUR PHOTO : $e\n$s');
+      _snack('Erreur : $e');
+    }
+  }
+
+  // ---------- Actions ----------
+
+  Future<void> _pickBirthDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _birthDate ?? DateTime(now.year - 20),
+      firstDate: DateTime(1940),
+      lastDate: now,
+    );
+    if (picked != null) {
+      setState(() {
+        _birthDate = picked;
+        _birthController.text = _fmtDate(picked);
+      });
+    }
   }
 
   Future<void> _save() async {
@@ -48,28 +238,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         firstName: _firstNameController.text,
         lastName: _lastNameController.text,
         phone: _phoneController.text,
+        birthDate: _birthDate,
+        heightCm: _parse(_heightController.text),
+        weightKg: _parse(_weightController.text),
+        goal: _goal,
       );
 
-      // On recharge l'utilisateur pour garder la session à jour.
-      final fresh = await UserService.instance.getById(_user.id!);
-      if (fresh != null) {
-        SessionManager.instance.currentUser = fresh;
-        _user = fresh;
-      }
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profil mis à jour.')),
-      );
+      await _reloadUser();
+      _snack('Profil mis à jour.');
+      await _checkRewards();
     } on AuthException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.message)));
+      _snack(e.message);
     } catch (e, s) {
       debugPrint('ERREUR PROFIL : $e\n$s');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Erreur : $e')));
+      _snack('Erreur : $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -80,11 +262,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (_) => _ChangePasswordDialog(userId: _user.id!),
     );
-    if (ok == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Mot de passe modifié.')),
-      );
-    }
+    if (ok == true) _snack('Mot de passe modifié.');
   }
 
   void _logout() {
@@ -93,11 +271,96 @@ class _ProfileScreenState extends State<ProfileScreen> {
         context, AppRoutes.login, (route) => false);
   }
 
+  // ---------- Carte "profil complété" ----------
+
+  Widget _buildCompletionCard() {
+    final c = ProfileCompletion.of(_user);
+    final color = c.percent >= 100
+        ? Colors.green
+        : (c.percent >= 60 ? AppTheme.purpleLight : Colors.orange);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.purple.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('Profil complété',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary)),
+              const Spacer(),
+              Text('${c.percent} %',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, color: color, fontSize: 16)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: c.percent / 100,
+              minHeight: 10,
+              backgroundColor: color.withValues(alpha: 0.15),
+              valueColor: AlwaysStoppedAnimation(color),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            c.missing.isEmpty
+                ? 'Bravo, votre profil est complet !'
+                : 'À compléter : ${c.missing.join(', ')}',
+            style:
+                const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------- Carte niveau / XP ----------
+
+  Widget _buildXpCard() {
+    final info = LevelSystem.fromXp(_user.xp);
+    return XpCard(
+      level: info.level,
+      title: info.title,
+      totalXp: _user.xp,
+      xpInLevel: info.xpInLevel,
+      xpForNext: info.xpForNext,
+      onTap: () => Navigator.pushNamed(context, AppRoutes.history),
+    );
+  }
+
+  Widget _sectionTitle(String text) => Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(text,
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textPrimary)),
+        ),
+      );
+
+  // ---------- Écran ----------
+
   @override
   Widget build(BuildContext context) {
-    final initial =
-        _user.firstName.isEmpty ? '?' : _user.firstName[0].toUpperCase();
-
     return Scaffold(
       backgroundColor: const Color(0xFFFCFAFE),
       appBar: AppBar(
@@ -111,14 +374,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
           key: _formKey,
           child: Column(
             children: [
-              CircleAvatar(
-                radius: 42,
-                backgroundColor: AppTheme.purpleLight,
-                child: Text(initial,
-                    style: const TextStyle(
-                        fontSize: 34,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold)),
+              // Avatar cliquable (petit crayon en bas à droite)
+              GestureDetector(
+                onTap: _chooseAvatar,
+                child: Stack(
+                  children: [
+                    UserAvatar(
+                      photoUrl: _user.photoUrl,
+                      initial: _initial,
+                      radius: 46,
+                    ),
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppTheme.purpleLight),
+                        ),
+                        child: const Icon(Icons.edit,
+                            size: 16, color: AppTheme.purpleLight),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 12),
               Text(_user.fullName,
@@ -139,8 +420,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Chip(label: Text(_user.status.label)),
                 ],
               ),
+              const SizedBox(height: 16),
+
+              _buildCompletionCard(),
+              const SizedBox(height: 14),
+              _buildXpCard(),
               const SizedBox(height: 24),
 
+              // ----- Informations personnelles -----
+              _sectionTitle('Informations personnelles'),
               TextFormField(
                 controller: _firstNameController,
                 textCapitalization: TextCapitalization.words,
@@ -173,8 +461,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 18),
+              TextFormField(
+                controller: _birthController,
+                readOnly: true,
+                onTap: _pickBirthDate,
+                decoration: pillDecoration(
+                  'Date de naissance (facultatif)',
+                  suffix: const Icon(Icons.calendar_today_outlined),
+                ),
+              ),
+              const SizedBox(height: 28),
 
+              // ----- Profil sportif -----
+              _sectionTitle('Profil sportif (facultatif)'),
+              TextFormField(
+                controller: _heightController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: pillDecoration('Taille (cm)'),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  final n = _parse(v);
+                  if (n == null || n < 100 || n > 250) {
+                    return 'Taille invalide (100 à 250 cm)';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 18),
+              TextFormField(
+                controller: _weightController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: pillDecoration('Poids (kg)'),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  final n = _parse(v);
+                  if (n == null || n < 30 || n > 300) {
+                    return 'Poids invalide (30 à 300 kg)';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 18),
+              DropdownButtonFormField<UserGoal>(
+                initialValue: _goal,
+                decoration: pillDecoration('Objectif sportif'),
+                items: UserGoal.values
+                    .map((g) =>
+                        DropdownMenuItem(value: g, child: Text(g.label)))
+                    .toList(),
+                onChanged: (g) => setState(() => _goal = g),
+              ),
+              const SizedBox(height: 28),
+
+              // ----- Boutons -----
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(

@@ -6,7 +6,8 @@ import '../models/user.dart';
 import '../models/user_role.dart';
 import '../models/user_status.dart';
 import '../models/user_table.dart';
-
+import '../models/user_goal.dart';
+import 'xp_service.dart';
 /// Erreur métier (email déjà pris, mauvais mot de passe...) avec un message affichable.
 class AuthException implements Exception {
   final String message;
@@ -35,7 +36,7 @@ class UserService {
   /// - Autres rôles (responsable, nutritionniste, coach) : compte "en attente"
   ///   jusqu'à validation par l'administrateur.
   /// Le rôle administrateur ne peut pas être choisi ici.
-  Future<User> register({
+    Future<User> register({
     required String firstName,
     required String lastName,
     required String email,
@@ -43,14 +44,14 @@ class UserService {
     required String phone,
     UserRole role = UserRole.member,
     CoachType? coachType,
-  }) {
+  }) async {
     if (role == UserRole.admin) {
       throw AuthException('Ce rôle ne peut pas être choisi à l\'inscription.');
     }
 
     final isCoach = role == UserRole.coach;
 
-    return _createUser(
+    final user = await _createUser(
       firstName: firstName,
       lastName: lastName,
       email: email,
@@ -60,9 +61,15 @@ class UserService {
       status: role == UserRole.member ? UserStatus.active : UserStatus.pending,
       coachType: isCoach ? coachType : null,
     );
-  }
 
-  Future<User> login(String email, String password) async {
+    // Points de bienvenue (une seule fois).
+    await XpService.instance
+        .awardOnce(user.id!, 'registration', 20, 'Bienvenue sur MyGym !');
+
+    // On recharge l'utilisateur pour avoir son XP à jour.
+    return (await getById(user.id!)) ?? user;
+  }
+    Future<User> login(String email, String password) async {
     final user = await getByEmail(email);
 
     // Même message dans les deux cas pour ne pas révéler si l'email existe.
@@ -79,22 +86,12 @@ class UserService {
         'Ce compte est désactivé. Contactez un administrateur.',
       );
     }
-    return user;
-  }
 
-  /// Réinitialisation du mot de passe (application locale, sans envoi d'email).
-  Future<void> resetPassword(String email, String newPassword) async {
-    final user = await getByEmail(email);
-    if (user == null) {
-      throw AuthException('Aucun compte ne correspond à cet email.');
-    }
-    final db = await _db;
-    await db.update(
-      UserTable.tableName,
-      {UserTable.colPasswordHash: PasswordHasher.hash(newPassword)},
-      where: '${UserTable.colId} = ?',
-      whereArgs: [user.id],
-    );
+    // +5 XP pour la première connexion de la journée.
+    await XpService.instance.awardDailyLogin(user.id!);
+
+    // On recharge l'utilisateur pour avoir son XP à jour.
+    return (await getById(user.id!)) ?? user;
   }
 
   Future<void> changePassword(
@@ -176,6 +173,10 @@ class UserService {
     required String firstName,
     required String lastName,
     required String phone,
+    DateTime? birthDate,
+    double? heightCm,
+    double? weightKg,
+    UserGoal? goal,
   }) async {
     if (await phoneExists(phone, excludeUserId: userId)) {
       throw AuthException('Ce numéro de téléphone est déjà utilisé.');
@@ -188,6 +189,10 @@ class UserService {
         UserTable.colFirstName: firstName.trim(),
         UserTable.colLastName: lastName.trim(),
         UserTable.colPhone: phone.trim(),
+        UserTable.colBirthDate: birthDate?.toIso8601String(),
+        UserTable.colHeightCm: heightCm,
+        UserTable.colWeightKg: weightKg,
+        UserTable.colGoal: goal?.value,
       },
       where: '${UserTable.colId} = ?',
       whereArgs: [userId],
@@ -316,9 +321,33 @@ class UserService {
       UserTable.tableName,
       where: "REPLACE(${UserTable.colPhone}, ' ', '') = ?"
           "${excludeUserId != null ? ' AND ${UserTable.colId} != ?' : ''}",
-      whereArgs: [cleaned, if (excludeUserId != null) excludeUserId],
+            whereArgs: [cleaned, ?excludeUserId],
       limit: 1,
     );
     return rows.isNotEmpty;
+  }
+    /// Enregistre l'adresse de la photo de profil (null = retirer la photo).
+  Future<void> updatePhoto(int userId, String? photoUrl) async {
+    final db = await _db;
+    await db.update(
+      UserTable.tableName,
+      {UserTable.colPhotoUrl: photoUrl},
+      where: '${UserTable.colId} = ?',
+      whereArgs: [userId],
+    );
+  }
+    /// Réinitialisation du mot de passe (application locale, sans envoi d'email).
+  Future<void> resetPassword(String email, String newPassword) async {
+    final user = await getByEmail(email);
+    if (user == null) {
+      throw AuthException('Aucun compte ne correspond à cet email.');
+    }
+    final db = await _db;
+    await db.update(
+      UserTable.tableName,
+      {UserTable.colPasswordHash: PasswordHasher.hash(newPassword)},
+      where: '${UserTable.colId} = ?',
+      whereArgs: [user.id],
+    );
   }
 }

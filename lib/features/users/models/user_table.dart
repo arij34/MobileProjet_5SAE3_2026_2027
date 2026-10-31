@@ -15,6 +15,14 @@ class UserTable {
   static const String colCoachType = 'coach_type';
   static const String colCreatedAt = 'created_at';
 
+  // Ajoutés en version 3 (profil enrichi + points d'expérience)
+  static const String colPhotoUrl = 'photo_url';
+  static const String colBirthDate = 'birth_date';
+  static const String colHeightCm = 'height_cm';
+  static const String colWeightKg = 'weight_kg';
+  static const String colGoal = 'goal';
+  static const String colXp = 'xp';
+
   /// Rôles : administrateur, responsable de salle, nutritionniste,
   /// coach et adhérent. Statuts : actif, en attente, désactivé.
   static Future<void> createTable(Database db) async {
@@ -32,7 +40,13 @@ class UserTable {
           CHECK($colStatus IN ('active', 'pending', 'disabled')),
         $colCoachType TEXT
           CHECK($colCoachType IN ('gym_coach', 'free_coach')),
-        $colCreatedAt TEXT NOT NULL
+        $colCreatedAt TEXT NOT NULL,
+        $colPhotoUrl TEXT,
+        $colBirthDate TEXT,
+        $colHeightCm REAL,
+        $colWeightKg REAL,
+        $colGoal TEXT,
+        $colXp INTEGER NOT NULL DEFAULT 0
       )
     ''');
   }
@@ -60,5 +74,26 @@ class UserTable {
 
     // 4. On supprime l'ancienne table
     await db.execute('DROP TABLE ${tableName}_old');
+  }
+
+  /// Migration v2 -> v3 : profil enrichi (photo, date de naissance, taille,
+  /// poids, objectif) et points d'expérience.
+  /// On n'ajoute une colonne que si elle n'existe pas déjà.
+  static Future<void> upgradeToV3(Database db) async {
+    final info = await db.rawQuery('PRAGMA table_info($tableName)');
+    final existing = info.map((row) => row['name'] as String).toSet();
+
+    Future<void> addColumn(String name, String type) async {
+      if (!existing.contains(name)) {
+        await db.execute('ALTER TABLE $tableName ADD COLUMN $name $type');
+      }
+    }
+
+    await addColumn(colPhotoUrl, 'TEXT');
+    await addColumn(colBirthDate, 'TEXT');
+    await addColumn(colHeightCm, 'REAL');
+    await addColumn(colWeightKg, 'REAL');
+    await addColumn(colGoal, 'TEXT');
+    await addColumn(colXp, 'INTEGER NOT NULL DEFAULT 0');
   }
 }

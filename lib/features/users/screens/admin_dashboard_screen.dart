@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/session/session_manager.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_loader.dart';
 import '../models/user.dart';
 import '../models/user_role.dart';
 import '../models/user_status.dart';
@@ -14,6 +14,14 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
+  // Palette MyGym
+  static const _violetDark = Color(0xFF4C378E);
+  static const _pink = Color(0xFFD43DA7);
+  static const _grayLight = Color(0xFFEFEDF5);
+  static const _lilac = Color(0xFFE8D8FC);
+  static const _violet = Color(0xFFA86BEE);
+  static const _textSecondary = Color(0xFF7A7390);
+
   List<User> _users = [];
   bool _loading = true;
   String _search = '';
@@ -43,8 +51,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: _violetDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
   }
 
   /// Exécute une action, affiche un message, puis recharge la liste.
@@ -59,19 +73,27 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
+  // ---------- Actions ----------
+
   Future<void> _changeRole(User u) async {
     final role = await showDialog<UserRole>(
       context: context,
-      builder: (_) => SimpleDialog(
-        title: Text('Rôle de ${u.fullName}'),
+      builder: (dialogContext) => SimpleDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Text('Rôle de ${u.fullName}',
+            style: const TextStyle(
+                color: _violetDark, fontWeight: FontWeight.bold)),
         children: UserRole.values
             .map((r) => SimpleDialogOption(
-                  onPressed: () => Navigator.pop(context, r),
+                  onPressed: () => Navigator.pop(dialogContext, r),
                   child: Row(
                     children: [
+                      Icon(_roleIcon(r), color: _violet, size: 20),
+                      const SizedBox(width: 12),
                       Expanded(child: Text(r.label)),
                       if (r == u.role)
-                        const Icon(Icons.check, color: Colors.green),
+                        const Icon(Icons.check_circle, color: _pink),
                     ],
                   ),
                 ))
@@ -86,17 +108,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Future<void> _delete(User u) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Supprimer ce compte ?'),
-        content: Text('${u.fullName} (${u.email}) sera supprimé définitivement.'),
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Text('Supprimer ce compte ?',
+            style:
+                TextStyle(color: _violetDark, fontWeight: FontWeight.bold)),
+        content:
+            Text('${u.fullName} (${u.email}) sera supprimé définitivement.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Annuler'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Supprimer',
+                style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -105,22 +133,46 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     await _run(() => UserService.instance.delete(u.id!), 'Compte supprimé.');
   }
 
+  // ---------- Helpers visuels ----------
+
   Color _statusColor(UserStatus s) {
     switch (s) {
       case UserStatus.active:
-        return Colors.green;
+        return const Color(0xFF2E9E6B);
       case UserStatus.pending:
-        return Colors.orange;
+        return const Color(0xFFE8920C);
       case UserStatus.disabled:
-        return Colors.red;
+        return const Color(0xFFD64545);
     }
   }
+
+  IconData _roleIcon(UserRole r) {
+    switch (r) {
+      case UserRole.admin:
+        return Icons.admin_panel_settings;
+      case UserRole.gymManager:
+        return Icons.storefront;
+      case UserRole.nutritionist:
+        return Icons.restaurant_menu;
+      case UserRole.coach:
+        return Icons.sports;
+      case UserRole.member:
+        return Icons.person;
+    }
+  }
+
+  // ---------- Build ----------
 
   @override
   Widget build(BuildContext context) {
     if (!_isAdmin) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Accès refusé')),
+        backgroundColor: _grayLight,
+        appBar: AppBar(
+          title: const Text('Accès refusé'),
+          backgroundColor: _violetDark,
+          foregroundColor: Colors.white,
+        ),
         body: const Center(
           child: Text('Cette page est réservée à l\'administrateur.'),
         ),
@@ -133,79 +185,163 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: const Color(0xFFFCFAFE),
-        appBar: AppBar(
-          title: const Text('Tableau de bord'),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Actualiser',
-              onPressed: _load,
-            ),
-          ],
-          bottom: TabBar(
-            tabs: [
-              Tab(text: 'En attente (${pending.length})'),
-              const Tab(text: 'Utilisateurs'),
-            ],
-          ),
-        ),
-        body: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : Column(
-                children: [
-                  _buildStats(),
-                  Expanded(
-                    child: TabBarView(
+        backgroundColor: _grayLight,
+        body: Column(
+          children: [
+            _buildHeader(),
+            _buildTabBar(pending.length),
+            Expanded(
+              child: _loading
+                  ? const Center(child: AppLoader(size: 48, color: _pink))
+                  : TabBarView(
                       children: [
                         _buildPendingTab(pending),
                         _buildUsersTab(),
                       ],
                     ),
-                  ),
-                ],
-              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // ---------- Statistiques ----------
+  // ---------- En-tête + statistiques ----------
 
-  Widget _buildStats() {
+  Widget _buildHeader() {
     int count(UserStatus s) => _users.where((u) => u.status == s).length;
 
-    Widget stat(String label, int value, Color color) => Expanded(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              children: [
-                Text('$value',
-                    style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: color)),
-                const SizedBox(height: 2),
-                Text(label,
-                    style: const TextStyle(
-                        fontSize: 11, color: AppTheme.textSecondary)),
-              ],
-            ),
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_violetDark, _violet],
+        ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(32),
+          bottomRight: Radius.circular(32),
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 4, 8, 22),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  if (Navigator.canPop(context))
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back_ios_new,
+                          color: Colors.white, size: 20),
+                      onPressed: () => Navigator.pop(context),
+                    )
+                  else
+                    const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Tableau de bord',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        Text(
+                          'Bonjour, ${_me?.firstName ?? ''}',
+                          style: TextStyle(
+                            color: _lilac.withValues(alpha: 0.95),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh, color: Colors.white),
+                    tooltip: 'Actualiser',
+                    onPressed: _load,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  children: [
+                    _stat('Total', _users.length, Icons.groups, Colors.white),
+                    _stat('Actifs', count(UserStatus.active),
+                        Icons.check_circle, const Color(0xFF7DF0B8)),
+                    _stat('Attente', count(UserStatus.pending),
+                        Icons.hourglass_bottom, const Color(0xFFFFD27A)),
+                    _stat('Désact.', count(UserStatus.disabled), Icons.block,
+                        const Color(0xFFFF9C9C)),
+                  ],
+                ),
+              ),
+            ],
           ),
-        );
+        ),
+      ),
+    );
+  }
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 14, 12, 6),
-      child: Row(
-        children: [
-          stat('Total', _users.length, AppTheme.purpleLight),
-          stat('Actifs', count(UserStatus.active), Colors.green),
-          stat('En attente', count(UserStatus.pending), Colors.orange),
-          stat('Désactivés', count(UserStatus.disabled), Colors.red),
+  Widget _stat(String label, int value, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.16),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(height: 6),
+            Text('$value',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold)),
+            Text(label,
+                style: TextStyle(
+                    color: _lilac.withValues(alpha: 0.95), fontSize: 11)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------- Onglets ----------
+
+  Widget _buildTabBar(int pendingCount) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: _lilac,
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: TabBar(
+        dividerColor: Colors.transparent,
+        indicatorSize: TabBarIndicatorSize.tab,
+        indicator: BoxDecoration(
+          borderRadius: BorderRadius.circular(26),
+          gradient: const LinearGradient(colors: [_violetDark, _violet]),
+        ),
+        labelColor: Colors.white,
+        unselectedLabelColor: _violetDark,
+        labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        tabs: [
+          Tab(height: 38, text: 'En attente ($pendingCount)'),
+          const Tab(height: 38, text: 'Utilisateurs'),
         ],
       ),
     );
@@ -215,66 +351,104 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _buildPendingTab(List<User> pending) {
     if (pending.isEmpty) {
-      return const Center(
-        child: Text('Aucun compte en attente de validation.',
-            style: TextStyle(color: AppTheme.textSecondary)),
+      return _emptyState(
+        Icons.verified_user_outlined,
+        'Aucun compte en attente de validation.',
       );
     }
-    return ListView.builder(
-      padding: const EdgeInsets.all(14),
-      itemCount: pending.length,
-      itemBuilder: (_, i) {
-        final u = pending[i];
-        final roleText = u.coachType == null
-            ? u.role.label
-            : '${u.role.label} · ${u.coachType!.label}';
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(u.fullName,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                Text(u.email,
-                    style: const TextStyle(color: AppTheme.textSecondary)),
-                Text(u.phone,
-                    style: const TextStyle(color: AppTheme.textSecondary)),
-                const SizedBox(height: 6),
-                Chip(label: Text(roleText)),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+    return RefreshIndicator(
+      color: _pink,
+      onRefresh: _load,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        itemCount: pending.length,
+        itemBuilder: (_, i) => _buildPendingCard(pending[i]),
+      ),
+    );
+  }
+
+  Widget _buildPendingCard(User u) {
+    final roleText = u.coachType == null
+        ? u.role.label
+        : '${u.role.label} · ${u.coachType!.label}';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _avatar(u, 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    OutlinedButton(
-                      onPressed: () => _run(
-                        () => UserService.instance
-                            .setStatus(u.id!, UserStatus.disabled),
-                        'Compte refusé.',
-                      ),
-                      child: const Text('Refuser'),
-                    ),
-                    const SizedBox(width: 10),
-                    ElevatedButton(
-                      onPressed: () => _run(
-                        () => UserService.instance
-                            .setStatus(u.id!, UserStatus.active),
-                        'Compte validé.',
-                      ),
-                      child: const Text('Valider'),
-                    ),
+                    Text(u.fullName,
+                        style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: _violetDark)),
+                    const SizedBox(height: 2),
+                    Text(u.email,
+                        style: const TextStyle(
+                            color: _textSecondary, fontSize: 13)),
+                    Text(u.phone,
+                        style: const TextStyle(
+                            color: _textSecondary, fontSize: 13)),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        );
-      },
+          const SizedBox(height: 12),
+          _pill(roleText, _violet, icon: _roleIcon(u.role)),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFD64545),
+                    side: const BorderSide(color: Color(0xFFD64545)),
+                    shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  icon: const Icon(Icons.close, size: 18),
+                  label: const Text('Refuser'),
+                  onPressed: () => _run(
+                    () => UserService.instance
+                        .setStatus(u.id!, UserStatus.disabled),
+                    'Compte refusé.',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _pink,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  icon: const Icon(Icons.check, size: 18),
+                  label: const Text('Valider'),
+                  onPressed: () => _run(
+                    () => UserService.instance
+                        .setStatus(u.id!, UserStatus.active),
+                    'Compte validé.',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -291,28 +465,38 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
           child: TextField(
             onChanged: (v) => setState(() => _search = v),
             decoration: InputDecoration(
               hintText: 'Rechercher un nom ou un email',
-              prefixIcon: const Icon(Icons.search),
+              hintStyle: const TextStyle(color: _textSecondary),
+              prefixIcon: const Icon(Icons.search, color: _violet),
               filled: true,
               fillColor: Colors.white,
               contentPadding: const EdgeInsets.symmetric(vertical: 0),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(30),
-                borderSide: const BorderSide(color: Color(0xFFBDB6C8)),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(30),
+                borderSide: const BorderSide(color: _violet, width: 1.6),
               ),
             ),
           ),
         ),
         Expanded(
           child: list.isEmpty
-              ? const Center(child: Text('Aucun utilisateur trouvé.'))
-              : ListView.builder(
-                  itemCount: list.length,
-                  itemBuilder: (_, i) => _buildUserTile(list[i]),
+              ? _emptyState(Icons.search_off, 'Aucun utilisateur trouvé.')
+              : RefreshIndicator(
+                  color: _pink,
+                  onRefresh: _load,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    itemCount: list.length,
+                    itemBuilder: (_, i) => _buildUserTile(list[i]),
+                  ),
                 ),
         ),
       ],
@@ -323,32 +507,50 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final isMe = u.id == _me?.id;
     final color = _statusColor(u.status);
 
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: AppTheme.purpleLight,
-        child: Text(
-          u.firstName.isEmpty ? '?' : u.firstName[0].toUpperCase(),
-          style: const TextStyle(color: Colors.white),
-        ),
-      ),
-      title: Text(isMe ? '${u.fullName} (vous)' : u.fullName),
-      subtitle: Text('${u.email}\n${u.role.label}'),
-      isThreeLine: true,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+      decoration: _cardDecoration(),
+      child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+          _avatar(u, 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(isMe ? '${u.fullName} (vous)' : u.fullName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: _violetDark)),
+                const SizedBox(height: 2),
+                Text(u.email,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style:
+                        const TextStyle(color: _textSecondary, fontSize: 12)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    _pill(u.role.label, _violet, icon: _roleIcon(u.role)),
+                    _pill(u.status.label, color),
+                  ],
+                ),
+              ],
             ),
-            child: Text(u.status.label,
-                style: TextStyle(color: color, fontSize: 11)),
           ),
           // L'admin ne peut pas se modifier lui-même (évite de se bloquer).
           if (!isMe)
             PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, color: _violetDark),
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
               onSelected: (action) {
                 switch (action) {
                   case 'role':
@@ -372,20 +574,112 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               },
               itemBuilder: (_) => [
                 const PopupMenuItem(
-                    value: 'role', child: Text('Changer le rôle')),
+                  value: 'role',
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.swap_horiz, color: _violet),
+                    title: Text('Changer le rôle'),
+                  ),
+                ),
                 PopupMenuItem(
                   value: 'toggle',
-                  child: Text(u.status == UserStatus.active
-                      ? 'Désactiver'
-                      : 'Activer'),
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                        u.status == UserStatus.active
+                            ? Icons.block
+                            : Icons.check_circle_outline,
+                        color: _violet),
+                    title: Text(u.status == UserStatus.active
+                        ? 'Désactiver'
+                        : 'Activer'),
+                  ),
                 ),
                 const PopupMenuItem(
                   value: 'delete',
-                  child: Text('Supprimer',
-                      style: TextStyle(color: Colors.red)),
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.delete_outline, color: Colors.red),
+                    title:
+                        Text('Supprimer', style: TextStyle(color: Colors.red)),
+                  ),
                 ),
               ],
-            ),
+            )
+          else
+            const SizedBox(width: 12),
+        ],
+      ),
+    );
+  }
+
+  // ---------- Petits composants ----------
+
+  BoxDecoration _cardDecoration() => BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: _violetDark.withValues(alpha: 0.07),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      );
+
+  Widget _avatar(User u, double radius) {
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: _lilac,
+      child: Text(
+        u.firstName.isEmpty ? '?' : u.firstName[0].toUpperCase(),
+        style: TextStyle(
+          color: _violetDark,
+          fontWeight: FontWeight.bold,
+          fontSize: radius * 0.8,
+        ),
+      ),
+    );
+  }
+
+  Widget _pill(String text, Color color, {IconData? icon}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 13, color: color),
+            const SizedBox(width: 4),
+          ],
+          Text(text,
+              style: TextStyle(
+                  color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _emptyState(IconData icon, String message) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(22),
+            decoration:
+                const BoxDecoration(color: _lilac, shape: BoxShape.circle),
+            child: Icon(icon, size: 40, color: _violet),
+          ),
+          const SizedBox(height: 14),
+          Text(message, style: const TextStyle(color: _textSecondary)),
         ],
       ),
     );
