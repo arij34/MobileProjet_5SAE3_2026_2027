@@ -262,7 +262,7 @@ class _HomeScreenState extends State<HomeScreen> {
               _bannerImage,
               fit: BoxFit.cover,
               // Si l'image est introuvable : fond dégradé de secours
-              errorBuilder: (_, __, ___) => Container(
+              errorBuilder: (_, _, _) => Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(colors: [_lilac, _violet]),
                 ),

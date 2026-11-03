@@ -33,7 +33,7 @@ class UserTable {
   /// coach et adhérent. Statuts : actif, en attente, désactivé.
   static Future<void> createTable(Database db) async {
     await db.execute('''
-      CREATE TABLE $tableName (
+      CREATE TABLE IF NOT EXISTS $tableName (
         $colId INTEGER PRIMARY KEY AUTOINCREMENT,
         $colFirstName TEXT NOT NULL,
         $colLastName TEXT NOT NULL,

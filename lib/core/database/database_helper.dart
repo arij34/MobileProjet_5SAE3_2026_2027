@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mygym/features/users/models/activity_log_table.dart';
 import 'package:mygym/features/users/models/user_table.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
@@ -7,12 +8,15 @@ import 'package:sqflite/sqflite.dart';
 ///
 /// Utilisation dans un service :
 ///   final db = await DatabaseHelper.instance.database;
+///
+/// RÈGLE D'ÉQUIPE : pour ajouter une table, ajouter UNE ligne
+/// dans _createAllTables (+ l'import en haut). Rien d'autre.
 class DatabaseHelper {
   DatabaseHelper._internal();
   static final DatabaseHelper instance = DatabaseHelper._internal();
 
   static const String _dbName = 'mygym.db';
-  static const int _dbVersion = 5; // 5 : ajout de users.proof_path
+  static const int _dbVersion = 6;
 
   Future<Database>? _dbFuture;
 
@@ -28,29 +32,34 @@ class DatabaseHelper {
         // Active les clés étrangères (FOREIGN KEY) pour toute l'équipe.
         await db.execute('PRAGMA foreign_keys = ON');
       },
-      onCreate: _onCreate,
+      onCreate: (db, version) => _createAllTables(db),
       onUpgrade: _onUpgrade,
+      // À chaque ouverture : crée les tables manquantes (ajoutées par un collègue).
+      onOpen: (db) => _createAllTables(db),
     );
   }
 
-  /// Crée toutes les tables au premier lancement de l'application.
-  Future<void> _onCreate(Database db, int version) async {
+  /// Toutes les tables du projet (IF NOT EXISTS obligatoire dans chaque createTable).
+  /// Chaque collègue ajoute sa ligne ici.
+  Future<void> _createAllTables(Database db) async {
     await UserTable.createTable(db); // Module Utilisateurs
+    await ActivityLogTable.createTable(db); // Journal d'activité (après users)
 
-    // --- Chaque collègue ajoute la création de sa table ici ---
+    // --- Chaque collègue ajoute SA ligne ici (et son import en haut) ---
     // await GymTable.createTable(db);        // Module Salles de sport
     // await ChallengeTable.createTable(db);  // Module Challenges
     // await NutritionTable.createTable(db);  // Module Nutrition
     // await ActivityTable.createTable(db);   // Module Activités
   }
 
-  /// Migrations pour les bases déjà installées.
+  /// Migrations : uniquement pour MODIFIER une table qui existe déjà.
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) await UserTable.upgradeToV2(db);
     if (oldVersion < 3) await UserTable.upgradeToV3(db);
     if (oldVersion < 4) await UserTable.upgradeToV4(db);
     if (oldVersion < 5) await UserTable.upgradeToV5(db);
-    // Prochaines migrations : if (oldVersion < 6) { ... }
+    // La table activity_log est créée par _createAllTables (onOpen).
+    // Prochaine modification de table : if (oldVersion < 7) { ... } puis _dbVersion = 7
   }
 
   /// Outil de développement : supprime la base pour la recréer au prochain accès.
