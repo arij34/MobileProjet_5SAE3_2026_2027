@@ -97,18 +97,20 @@ _ModuleItem(
           () => _soon('Challenges')),
       _ModuleItem(
           'Nutrition',
-          'Programmes & conseils',
+          'Suivi & coach IA',
           Icons.restaurant_menu,
           const [Color(0xFFA86BEE), Color(0xFFC9A7F5)],
           Permission.viewNutrition,
-          () => _soon('Nutrition')),
+          () => Navigator.pushNamed(context, AppRoutes.nutrition)),
       _ModuleItem(
           'Activités',
-          'Réserver une séance',
+          Permissions.can(user, Permission.manageActivities)
+              ? 'Gérer activités & planning'
+              : 'Réserver une séance',
           Icons.event_available,
           const [Color(0xFF6C4FB8), Color(0xFFA86BEE)],
           Permission.viewActivities,
-          () => _soon('Activités')),
+          () => Navigator.pushNamed(context, AppRoutes.activities)),
     ];
 
     // On ne garde que les services autorisés pour ce rôle.

@@ -13,6 +13,8 @@ import '../../features/gyms/screens/my_memberships_screen.dart';
 import '../../features/gyms/screens/membership_requests_screen.dart';
 import '../session/permissions.dart';
 import '../../features/gyms/screens/coach_gyms_screen.dart';
+import '../../features/activities/screens/activities_home_screen.dart';
+import '../../features/nutrition/screens/nutrition_shell_screen.dart';
 /// Toutes les routes de l'application.
 /// Chaque collègue ajoute ici les routes de son module.
 class AppRoutes {
@@ -28,6 +30,8 @@ class AppRoutes {
   static const String myMemberships = '/my-memberships';
   static const String membershipRequests = '/membership-requests';
   static const String coachGyms = '/coach-gyms';
+  static const String activities = '/activities';
+  static const String nutrition = '/nutrition';
   static Map<String, WidgetBuilder> get routes => {
         splash: (context) => const SplashScreen(),
         login: (context) => const LoginScreen(),
@@ -44,5 +48,7 @@ class AppRoutes {
         myMemberships: (_) => const MyMembershipsScreen(),
         membershipRequests: (_) => const MembershipRequestsScreen(),
         coachGyms: (_) => const CoachGymsScreen(),
+        activities: (_) => const ActivitiesHomeScreen(),
+        nutrition: (_) => const NutritionShellScreen(),
       };
 }

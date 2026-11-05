@@ -7,6 +7,11 @@ import '../../features/gyms/models/gym_table.dart';
 import '../../features/gyms/models/gym_equipment_table.dart';
 import '../../features/gyms/models/gym_membership_table.dart';
 import '../../features/gyms/models/gym_coach_tables.dart';
+import '../../features/activities/models/activity_table.dart';
+import '../../features/activities/models/activity_session_table.dart';
+import '../../features/activities/models/session_reservation_table.dart';
+import '../../features/nutrition/models/nutrition_tables.dart';
+import '../../features/nutrition/repositories/food_repository.dart';
 
 /// Accès unique à la base SQLite de MyGym (pattern singleton).
 ///
@@ -20,7 +25,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._internal();
 
   static const String _dbName = 'mygym.db';
-  static const int _dbVersion = 9;
+  static const int _dbVersion = 11;
 
   Future<Database>? _dbFuture;
 
@@ -53,10 +58,13 @@ class DatabaseHelper {
     await GymMembershipTable.createTable(db); // Adhésions (après users et gyms)
     await GymCoachTable.createTable(db); // Coachs de salle (après users et gyms)
     await GymCoachRequestTable.createTable(db); // Demandes salle <-> coach
+    await ActivityTable.createTable(db); // Activités (après gyms)
+    await ActivitySessionTable.createTable(db); // Séances (après activities et users)
+    await SessionReservationTable.createTable(db); // Réservations (après sessions et users)
+    await createNutritionTables(db); // Module Nutrition (6 tables, après users)
+    await FoodRepository.seedIfEmpty(db); // Aliments de démonstration (si vide)
     // --- Chaque collègue ajoute SA ligne ici (et son import en haut) ---
     // await ChallengeTable.createTable(db);  // Module Challenges
-    // await NutritionTable.createTable(db);  // Module Nutrition
-    // await ActivityTable.createTable(db);   // Module Activités
   }
 
   /// Ajoute une colonne seulement si elle n'existe pas déjà (migration rejouable).
@@ -99,8 +107,19 @@ class DatabaseHelper {
       await GymCoachTable.createTable(db);
       await GymCoachRequestTable.createTable(db);
     }
+    if (oldVersion < 10) {
+      // v10 : module Activités (3 nouvelles tables, rien à modifier).
+      await ActivityTable.createTable(db);
+      await ActivitySessionTable.createTable(db);
+      await SessionReservationTable.createTable(db);
+    }
+    if (oldVersion < 11) {
+      // v11 : module Nutrition (6 nouvelles tables + aliments de démonstration).
+      await createNutritionTables(db);
+      await FoodRepository.seedIfEmpty(db);
+    }
     // La table activity_log est créée par _createAllTables (onOpen).
-    // Prochaine modification de table : if (oldVersion < 10) { ... } puis _dbVersion = 10
+    // Prochaine modification de table : if (oldVersion < 12) { ... } puis _dbVersion = 12
   }
 
   /// Outil de développement : supprime la base pour la recréer au prochain accès.
