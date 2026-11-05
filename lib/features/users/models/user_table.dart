@@ -1,6 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 
-/// Définition de la table `users` (module Utilisateurs).
+/// Définition de la table users (module Utilisateurs).
 class UserTable {
   static const String tableName = 'users';
 
@@ -33,7 +33,7 @@ class UserTable {
   /// coach et adhérent. Statuts : actif, en attente, désactivé.
   static Future<void> createTable(Database db) async {
     await db.execute('''
-      CREATE TABLE $tableName (
+      CREATE TABLE IF NOT EXISTS $tableName (
         $colId INTEGER PRIMARY KEY AUTOINCREMENT,
         $colFirstName TEXT NOT NULL,
         $colLastName TEXT NOT NULL,
@@ -108,3 +108,4 @@ class UserTable {
     await _addColumnIfMissing(db, colProofPath, 'TEXT');
   }
 }
+

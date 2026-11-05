@@ -15,7 +15,11 @@ enum Permission {
   // ----- Module Salles de sport -----
   viewGyms,
   manageGyms,
-
+  manageGymEquipment,
+  joinGym, // un adhérent postule à une salle
+  manageMemberships, // accepter / refuser les demandes d'adhésion
+  manageGymCoaches, // inviter / modifier / retirer les coachs d'une salle
+  applyAsCoach,     // un coach postule à une salle et répond aux invitations  
   // ----- Module Activités -----
   viewActivities,
   manageActivities,
@@ -58,7 +62,11 @@ class Permissions {
       UserRole.member,
     },
     Permission.manageGyms: {UserRole.admin, UserRole.gymManager},
-
+    Permission.manageGymEquipment: {UserRole.admin, UserRole.gymManager},
+    Permission.joinGym: {UserRole.member},
+    Permission.manageMemberships: {UserRole.admin, UserRole.gymManager},
+    Permission.manageGymCoaches: {UserRole.admin, UserRole.gymManager},
+    Permission.applyAsCoach: {UserRole.coach},
     // ===== MODULE ACTIVITÉS =====
     Permission.viewActivities: {
       UserRole.admin,

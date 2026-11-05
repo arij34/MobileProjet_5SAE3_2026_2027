@@ -54,6 +54,8 @@
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
 	<key>UISupportedInterfaceOrientations</key>
+	<key>NSCameraUsageDescription</key><string>Prendre des photos des salles et équipements</string>
+    <key>NSPhotoLibraryUsageDescription</key><string>Choisir des photos</string>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>

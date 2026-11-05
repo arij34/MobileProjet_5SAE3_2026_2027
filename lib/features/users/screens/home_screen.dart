@@ -5,6 +5,7 @@ import '../../../core/session/session_manager.dart';
 import '../../../core/widgets/app_loader.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../models/user.dart';
+import '../../gyms/screens/gyms_list_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -67,13 +68,26 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Chaque service a la permission nécessaire pour l'afficher.
     final allModules = <_ModuleItem>[
-      _ModuleItem(
-          'Salles de sport',
-          'Trouver une salle',
-          Icons.fitness_center,
-          const [Color(0xFF4C378E), Color(0xFF7B5BC4)],
-          Permission.viewGyms,
-          () => _soon('Salles de sport')),
+      // APRÈS
+_ModuleItem(
+  'Salles de sport',
+  Permissions.can(user, Permission.joinGym)
+      ? 'Trouver une salle'
+      : 'Gérer les salles',
+  Icons.fitness_center,
+  const [Color(0xFF4C378E), Color(0xFF7B5BC4)],
+  Permission.viewGyms,
+  () => Navigator.pushNamed(context, AppRoutes.gyms),
+),
+_ModuleItem(
+  'Mes salles',
+  'Équipes et invitations',
+  Icons.groups,
+  const [Color(0xFF6C4FB8), Color(0xFFA86BEE)],
+  Permission.applyAsCoach,
+  () => Navigator.pushNamed(context, AppRoutes.coachGyms),
+),
+
       _ModuleItem(
           'Challenges',
           'Relever des défis',
