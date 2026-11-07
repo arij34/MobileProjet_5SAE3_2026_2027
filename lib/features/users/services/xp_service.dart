@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+
 import '../../../core/database/database_helper.dart';
 import '../models/activity_log.dart';
 import '../models/activity_log_table.dart';
@@ -22,21 +23,40 @@ class XpService {
     required String description,
   }) async {
     final db = await _db;
-    await db.transaction((txn) async {
-      await txn.insert(ActivityLogTable.tableName, {
-        ActivityLogTable.colUserId: userId,
-        ActivityLogTable.colType: type,
-        ActivityLogTable.colDescription: description,
-        ActivityLogTable.colXp: amount,
-        ActivityLogTable.colCreatedAt: DateTime.now().toIso8601String(),
-      });
-      await txn.rawUpdate(
-        'UPDATE ${UserTable.tableName} '
-        'SET ${UserTable.colXp} = ${UserTable.colXp} + ? '
-        'WHERE ${UserTable.colId} = ?',
-        [amount, userId],
-      );
+    await db.transaction(
+      (txn) => addXpInTransaction(
+        txn,
+        userId: userId,
+        amount: amount,
+        type: type,
+        description: description,
+      ),
+    );
+  }
+
+  Future<void> addXpInTransaction(
+    DatabaseExecutor txn, {
+    required int userId,
+    required int amount,
+    required String type,
+    required String description,
+  }) async {
+    await txn.insert(ActivityLogTable.tableName, {
+      ActivityLogTable.colUserId: userId,
+      ActivityLogTable.colType: type,
+      ActivityLogTable.colDescription: description,
+      ActivityLogTable.colXp: amount,
+      ActivityLogTable.colCreatedAt: DateTime.now().toIso8601String(),
     });
+    final updated = await txn.rawUpdate(
+      'UPDATE ${UserTable.tableName} '
+      'SET ${UserTable.colXp} = ${UserTable.colXp} + ? '
+      'WHERE ${UserTable.colId} = ?',
+      [amount, userId],
+    );
+    if (updated != 1) {
+      throw StateError('Utilisateur introuvable pour l’attribution des XP');
+    }
   }
 
   /// Donne les XP une seule fois dans la vie du compte pour ce [type].
@@ -50,7 +70,8 @@ class XpService {
     final db = await _db;
     final rows = await db.query(
       ActivityLogTable.tableName,
-      where: '${ActivityLogTable.colUserId} = ? AND '
+      where:
+          '${ActivityLogTable.colUserId} = ? AND '
           '${ActivityLogTable.colType} = ?',
       whereArgs: [userId, type],
       limit: 1,
@@ -76,7 +97,8 @@ class XpService {
     final db = await _db;
     final rows = await db.query(
       ActivityLogTable.tableName,
-      where: '${ActivityLogTable.colUserId} = ? AND '
+      where:
+          '${ActivityLogTable.colUserId} = ? AND '
           '${ActivityLogTable.colType} = ? AND '
           '${ActivityLogTable.colCreatedAt} >= ? AND '
           '${ActivityLogTable.colCreatedAt} < ?',

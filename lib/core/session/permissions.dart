@@ -28,6 +28,7 @@ enum Permission {
   // ----- Module Challenges -----
   viewChallenges,
   manageChallenges,
+  reviewChallenges,
   joinChallenge,
 
   // ----- Module Nutrition -----
@@ -84,7 +85,11 @@ class Permissions {
       UserRole.coach,
       UserRole.member,
     },
-    Permission.manageChallenges: {UserRole.gymManager},
+    Permission.manageChallenges: {
+      UserRole.gymManager,
+      UserRole.coach,
+    },
+    Permission.reviewChallenges: {UserRole.admin},
     Permission.joinChallenge: {UserRole.member},
 
     // ===== MODULE NUTRITION =====
@@ -132,5 +137,16 @@ class Permissions {
   static bool currentCan(Permission permission) {
     final user = SessionManager.instance.currentUser;
     return user != null && can(user, permission);
+  }
+
+  /// Challenge managers may edit only their own challenges.
+  static bool canModifyChallenge(User user, int challengeCreatedBy) {
+    if (!can(user, Permission.manageChallenges)) return false;
+    return user.id != null && user.id == challengeCreatedBy;
+  }
+
+  static bool currentCanModifyChallenge(int challengeCreatedBy) {
+    final user = SessionManager.instance.currentUser;
+    return user != null && canModifyChallenge(user, challengeCreatedBy);
   }
 }

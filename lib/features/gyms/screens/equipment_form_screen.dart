@@ -126,7 +126,7 @@ class _EquipmentFormScreenState extends State<EquipmentFormScreen> {
             ),
             gap,
             DropdownButtonFormField<EquipmentCategory>(
-              value: _category,
+              initialValue: _category,
               decoration: _deco('Catégorie', Icons.category),
               items: EquipmentCategory.values
                   .map((c) => DropdownMenuItem(value: c, child: Text(c.label)))
@@ -145,7 +145,7 @@ class _EquipmentFormScreenState extends State<EquipmentFormScreen> {
             ),
             gap,
             DropdownButtonFormField<EquipmentState>(
-              value: _state,
+              initialValue: _state,
               decoration: _deco('État', Icons.health_and_safety),
               items: EquipmentState.values
                   .map((s) => DropdownMenuItem(value: s, child: Text(s.label)))

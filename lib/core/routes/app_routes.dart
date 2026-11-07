@@ -15,6 +15,12 @@ import '../session/permissions.dart';
 import '../../features/gyms/screens/coach_gyms_screen.dart';
 import '../../features/activities/screens/activities_home_screen.dart';
 import '../../features/nutrition/screens/nutrition_shell_screen.dart';
+import '../../features/challenges/screens/challenges_screen.dart';
+import '../../features/challenges/screens/challenge_form_screen.dart';
+import '../../features/challenges/screens/challenge_detail_screen.dart';
+import '../../features/challenges/screens/admin_challenges_screen.dart';
+import '../../features/challenges/screens/ai_challenge_screen.dart';
+import '../../features/notifications/screens/notifications_screen.dart';
 /// Toutes les routes de l'application.
 /// Chaque collègue ajoute ici les routes de son module.
 class AppRoutes {
@@ -32,6 +38,12 @@ class AppRoutes {
   static const String coachGyms = '/coach-gyms';
   static const String activities = '/activities';
   static const String nutrition = '/nutrition';
+  static const String challenges = '/challenges';
+  static const String challengeForm = '/challenge-form';
+  static const String aiChallenge = '/ai-challenge';
+  static const String challengeDetail = '/challenge-detail';
+  static const String adminChallenges = '/admin-challenges';
+  static const String notifications = '/notifications';
   static Map<String, WidgetBuilder> get routes => {
         splash: (context) => const SplashScreen(),
         login: (context) => const LoginScreen(),
@@ -50,5 +62,16 @@ class AppRoutes {
         coachGyms: (_) => const CoachGymsScreen(),
         activities: (_) => const ActivitiesHomeScreen(),
         nutrition: (_) => const NutritionShellScreen(),
+        challenges: (_) => Permissions.currentCan(Permission.reviewChallenges)
+            ? const AdminChallengesScreen()
+            : const ChallengesScreen(),
+        challengeForm: (_) => const ChallengeFormScreen(),
+        aiChallenge: (_) => const AiChallengeScreen(),
+        adminChallenges: (_) => const AdminChallengesScreen(),
+        notifications: (_) => const NotificationsScreen(),
+        challengeDetail: (context) => ChallengeDetailScreen(
+              challengeId:
+                  ModalRoute.of(context)?.settings.arguments as int? ?? -1,
+            ),
       };
 }

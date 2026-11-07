@@ -14,6 +14,36 @@ class AppTheme {
   static const Color textPrimary = Color(0xFF282333);
   static const Color textSecondary = Color(0xFF817A90);
   static const Color borderColor = Color(0xFFE2DDEA);
+  static const Color surface = Colors.white;
+  static const Color error = Colors.red;
+  static const Color success = Colors.green;
+  static const Color challengeLight = Color(0xFFE97BC8);
+
+  static const double cardRadius = 24;
+  static const double headerRadius = 32;
+  static const double pillRadius = 30;
+  static const LinearGradient headerGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [primary, purpleLight],
+  );
+  static const LinearGradient challengeGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [accent, challengeLight],
+  );
+  static final List<BoxShadow> cardShadow = [
+    BoxShadow(
+      color: primary.withValues(alpha: 0.08),
+      blurRadius: 14,
+      offset: const Offset(0, 6),
+    ),
+  ];
+  static const TextStyle sectionTitle = TextStyle(
+    fontSize: 19,
+    fontWeight: FontWeight.w800,
+    color: primary,
+  );
 
   static ThemeData get light {
     final colorScheme = ColorScheme.fromSeed(

@@ -23,3 +23,9 @@ const String emailJsTemplateWaitlist = ''; // place libérée (liste d'attente)
 // iOS     : client OAuth « iOS » + reversed client id dans Info.plist.
 // serverClientId (client « Web ») est facultatif ; laisser vide sinon.
 const String googleServerClientId = '';
+
+// ----- Génération IA des challenges (OpenAI) -----
+class Secrets {
+  static const String openAiApiKey = '';
+  static const String openAiModel = 'gpt-4o-mini';
+}

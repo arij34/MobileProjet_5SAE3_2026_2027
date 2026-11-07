@@ -269,7 +269,7 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
                         shrinkWrap: true,
                         padding: EdgeInsets.zero,
                         itemCount: _results.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        separatorBuilder: (_, _) => const Divider(height: 1),
                         itemBuilder: (context, i) {
                           final r = _results[i];
                           return ListTile(

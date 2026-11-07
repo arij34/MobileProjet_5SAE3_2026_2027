@@ -8,7 +8,12 @@ class CustomTextField extends StatefulWidget {
   final bool isPassword;
   final TextInputType keyboardType;
   final String? Function(String?)? validator;
-  final TextInputAction textInputAction;
+  final TextInputAction? textInputAction;
+  final InputDecoration? decoration;
+  final bool enabled;
+  final int maxLines;
+  final TextCapitalization textCapitalization;
+  final ValueChanged<String>? onChanged;
 
   const CustomTextField({
     super.key,
@@ -19,6 +24,11 @@ class CustomTextField extends StatefulWidget {
     this.keyboardType = TextInputType.text,
     this.validator,
     this.textInputAction = TextInputAction.next,
+    this.decoration,
+    this.enabled = true,
+    this.maxLines = 1,
+    this.textCapitalization = TextCapitalization.none,
+    this.onChanged,
   });
 
   @override
@@ -38,22 +48,28 @@ class _CustomTextFieldState extends State<CustomTextField> {
   Widget build(BuildContext context) {
     return TextFormField(
       controller: widget.controller,
+      enabled: widget.enabled,
+      maxLines: widget.maxLines,
+      textCapitalization: widget.textCapitalization,
+      onChanged: widget.onChanged,
       obscureText: _obscure,
       keyboardType: widget.keyboardType,
       textInputAction: widget.textInputAction,
       validator: widget.validator,
-      decoration: InputDecoration(
-        labelText: widget.label,
-        prefixIcon: widget.icon != null ? Icon(widget.icon) : null,
-        suffixIcon: widget.isPassword
-            ? IconButton(
-                icon: Icon(
-                  _obscure ? Icons.visibility_off : Icons.visibility,
-                ),
-                onPressed: () => setState(() => _obscure = !_obscure),
-              )
-            : null,
-      ),
+      decoration:
+          widget.decoration ??
+          InputDecoration(
+            labelText: widget.label,
+            prefixIcon: widget.icon != null ? Icon(widget.icon) : null,
+            suffixIcon: widget.isPassword
+                ? IconButton(
+                    icon: Icon(
+                      _obscure ? Icons.visibility_off : Icons.visibility,
+                    ),
+                    onPressed: () => setState(() => _obscure = !_obscure),
+                  )
+                : null,
+          ),
     );
   }
 }

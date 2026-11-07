@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:mygym/features/users/models/activity_log_table.dart';
 import 'package:mygym/features/users/models/user_table.dart';
+import 'package:mygym/features/challenges/models/challenge_table.dart';
+import 'package:mygym/features/notifications/models/notification_table.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../features/gyms/models/gym_table.dart';
@@ -25,7 +27,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._internal();
 
   static const String _dbName = 'mygym.db';
-  static const int _dbVersion = 11;
+  static const int _dbVersion = 12;
 
   Future<Database>? _dbFuture;
 
@@ -63,8 +65,9 @@ class DatabaseHelper {
     await SessionReservationTable.createTable(db); // Réservations (après sessions et users)
     await createNutritionTables(db); // Module Nutrition (6 tables, après users)
     await FoodRepository.seedIfEmpty(db); // Aliments de démonstration (si vide)
+    await ChallengeTable.createAllTables(db); // Module Challenges
+    await NotificationTable.createTable(db); // Notifications des challenges
     // --- Chaque collègue ajoute SA ligne ici (et son import en haut) ---
-    // await ChallengeTable.createTable(db);  // Module Challenges
   }
 
   /// Ajoute une colonne seulement si elle n'existe pas déjà (migration rejouable).
@@ -118,8 +121,13 @@ class DatabaseHelper {
       await createNutritionTables(db);
       await FoodRepository.seedIfEmpty(db);
     }
+    if (oldVersion < 12) {
+      // v12 : tables des challenges et notifications associées.
+      await ChallengeTable.createAllTables(db);
+      await NotificationTable.createTable(db);
+    }
     // La table activity_log est créée par _createAllTables (onOpen).
-    // Prochaine modification de table : if (oldVersion < 12) { ... } puis _dbVersion = 12
+    // Prochaine modification de table : if (oldVersion < 13) { ... } puis _dbVersion = 13
   }
 
   /// Outil de développement : supprime la base pour la recréer au prochain accès.

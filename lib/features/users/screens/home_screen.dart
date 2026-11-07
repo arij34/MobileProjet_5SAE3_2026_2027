@@ -5,16 +5,20 @@ import '../../../core/session/session_manager.dart';
 import '../../../core/widgets/app_loader.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../models/user.dart';
-import '../../gyms/screens/gyms_list_screen.dart';
+import '../../notifications/services/notification_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.notificationService});
+
+  final NotificationService? notificationService;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  NotificationService get _notifications =>
+      widget.notificationService ?? NotificationService.instance;
   // Palette MyGym
   static const _violetDark = Color(0xFF4C378E);
   static const _pink = Color(0xFFD43DA7);
@@ -35,18 +39,31 @@ class _HomeScreenState extends State<HomeScreen> {
         Navigator.pushNamedAndRemoveUntil(
             context, AppRoutes.login, (route) => false);
       });
+    } else {
+      _notifications.resetUnreadCount();
+      _refreshNotifications();
     }
   }
 
-  void _soon(String module) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Module « $module » : en cours de développement.'),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: _violetDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
-    );
+  Future<void> _refreshNotifications() async {
+    try {
+      await _notifications.refreshUnreadCount();
+    } catch (e, s) {
+      debugPrint('ERREUR COMPTE NOTIFICATIONS : $e\n$s');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Impossible de charger les notifications')),
+        );
+      }
+    }
+  }
+
+  Future<void> _openRoute(String route) async {
+    await Navigator.pushNamed(context, route);
+    if (mounted && SessionManager.instance.isLoggedIn) {
+      setState(() {});
+      await _refreshNotifications();
+    }
   }
 
   String get _greeting {
@@ -77,7 +94,7 @@ _ModuleItem(
   Icons.fitness_center,
   const [Color(0xFF4C378E), Color(0xFF7B5BC4)],
   Permission.viewGyms,
-  () => Navigator.pushNamed(context, AppRoutes.gyms),
+  () => _openRoute(AppRoutes.gyms),
 ),
 _ModuleItem(
   'Mes salles',
@@ -85,7 +102,7 @@ _ModuleItem(
   Icons.groups,
   const [Color(0xFF6C4FB8), Color(0xFFA86BEE)],
   Permission.applyAsCoach,
-  () => Navigator.pushNamed(context, AppRoutes.coachGyms),
+  () => _openRoute(AppRoutes.coachGyms),
 ),
 
       _ModuleItem(
@@ -94,14 +111,14 @@ _ModuleItem(
           Icons.emoji_events,
           const [Color(0xFFD43DA7), Color(0xFFE97BC8)],
           Permission.viewChallenges,
-          () => _soon('Challenges')),
+          () => _openRoute(AppRoutes.challenges)),
       _ModuleItem(
           'Nutrition',
           'Suivi & coach IA',
           Icons.restaurant_menu,
           const [Color(0xFFA86BEE), Color(0xFFC9A7F5)],
           Permission.viewNutrition,
-          () => Navigator.pushNamed(context, AppRoutes.nutrition)),
+          () => _openRoute(AppRoutes.nutrition)),
       _ModuleItem(
           'Activités',
           Permissions.can(user, Permission.manageActivities)
@@ -110,7 +127,7 @@ _ModuleItem(
           Icons.event_available,
           const [Color(0xFF6C4FB8), Color(0xFFA86BEE)],
           Permission.viewActivities,
-          () => Navigator.pushNamed(context, AppRoutes.activities)),
+          () => _openRoute(AppRoutes.activities)),
     ];
 
     // On ne garde que les services autorisés pour ce rôle.
@@ -235,6 +252,22 @@ _ModuleItem(
                   ],
                 ),
               ),
+              ValueListenableBuilder<int>(
+                valueListenable: _notifications.unreadCount,
+                builder: (context, count, _) => Badge(
+                  isLabelVisible: count > 0,
+                  label: Text(count > 9 ? '9+' : '$count'),
+                  backgroundColor: _pink,
+                  child: IconButton(
+                    tooltip: 'Notifications',
+                    icon: const Icon(
+                      Icons.notifications_outlined,
+                      color: Colors.white,
+                    ),
+                    onPressed: () => _openRoute(AppRoutes.notifications),
+                  ),
+                ),
+              ),
               IconButton(
                 tooltip: 'Mon profil',
                 icon: Container(
@@ -252,8 +285,7 @@ _ModuleItem(
                   ),
                 ),
                 onPressed: () async {
-                  await Navigator.pushNamed(context, AppRoutes.profile);
-                  if (mounted) setState(() {}); // nom ou photo modifiés
+                  await _openRoute(AppRoutes.profile);
                 },
               ),
             ],
@@ -278,7 +310,7 @@ _ModuleItem(
               _bannerImage,
               fit: BoxFit.cover,
               // Si l'image est introuvable : fond dégradé de secours
-              errorBuilder: (_, __, ___) => Container(
+              errorBuilder: (_, _, _) => Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(colors: [_lilac, _violet]),
                 ),
@@ -336,7 +368,7 @@ _ModuleItem(
   Widget _buildAdminCard() {
     return InkWell(
       borderRadius: BorderRadius.circular(24),
-      onTap: () => Navigator.pushNamed(context, AppRoutes.adminDashboard),
+      onTap: () => _openRoute(AppRoutes.adminDashboard),
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(

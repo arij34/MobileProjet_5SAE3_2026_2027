@@ -126,7 +126,7 @@ class _CoachFormScreenState extends State<CoachFormScreen> {
             ),
             gap,
             DropdownButtonFormField<GymCoachStatus>(
-              value: _status,
+              initialValue: _status,
               decoration: _deco('Statut', Icons.toggle_on),
               items: GymCoachStatus.values
                   .map((s) => DropdownMenuItem(value: s, child: Text(s.label)))

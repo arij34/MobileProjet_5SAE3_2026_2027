@@ -184,7 +184,7 @@ class _RecommendationFormScreenState extends State<RecommendationFormScreen> {
             if (_mode == _LocationMode.city) ...[
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: _city,
+                initialValue: _city,
                 decoration: _deco('Ville', Icons.location_city),
                 items: _cities
                     .map((c) => DropdownMenuItem(value: c, child: Text(c)))

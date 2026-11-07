@@ -91,7 +91,7 @@ class GeocodingService {
       'format': 'jsonv2',
       'addressdetails': '1',
       'limit': '5',
-      if (countryCodes != null) 'countrycodes': countryCodes,
+      'countrycodes': ?countryCodes,
     });
     final data = await _get(uri);
     if (data is! List) return [];

@@ -102,7 +102,7 @@ class MembershipCardScreen extends StatelessWidget {
                     ),
                     child: valid
                         ? QrImageView(
-                            data: token!,
+                            data: token,
                             version: QrVersions.auto,
                             size: 200,
                             backgroundColor: Colors.white,
@@ -150,7 +150,7 @@ class MembershipCardScreen extends StatelessWidget {
                     tooltip: 'Copier',
                     icon: const Icon(Icons.copy, color: _violet),
                     onPressed: () async {
-                      await Clipboard.setData(ClipboardData(text: token!));
+                      await Clipboard.setData(ClipboardData(text: token));
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
